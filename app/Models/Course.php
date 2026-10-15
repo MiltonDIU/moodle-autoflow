@@ -7,10 +7,10 @@ use Illuminate\Database\Eloquent\Model;
 class Course extends Model
 {
     protected $fillable = [
+        'university_id',
         'name',
         'course_code',
         'gdrive_folder_id',
-        'root_folder_id',
         'status',
         'progress',
         'storage_driver',
@@ -25,4 +25,9 @@ class Course extends Model
         'video_map' => 'array',
         'progress' => 'integer'
     ];
+
+    public function university()
+    {
+        return $this->belongsTo(University::class);
+    }
 }

@@ -51,7 +51,15 @@ Deliver lecture videos flexibly without vendor lock-in:
 * **Cloudflare R2:** S3-compatible cloud storage with zero egress bandwidth charges.
 * **AWS S3 & CloudFront:** Enterprise Amazon Web Services storage integration.
 
-### 4. 🎓 Seamless Moodle LMS Integration
+### 4. 🏛️ Multi-Tenant University Architecture & RBAC
+* **Multi-Tenant Accounts:** Manage multiple universities and institutions (e.g. NextGen University, Daffodil International University) from a single deployment.
+* **Isolated Institutional Configurations:** Each university manages its own independent Moodle Base URL, Web Services Token, AI keys, Google Drive root folders, and video storage CDN drivers.
+* **Role-Based Access Control (RBAC):**
+  * 👑 **Super Admin:** Manage platform-wide universities, switch across workspaces, and govern all accounts.
+  * 🏫 **University Admin:** Manage university-specific Moodle connections, storage keys, course inventories, and faculty.
+  * 👨‍🏫 **Instructor / Course Creator:** Ingest course folders, preview synthesized 16-week curricula, and trigger automated Moodle synchronization.
+
+### 5. 🎓 Seamless Moodle LMS Integration
 * Connects to any remote or local Moodle instance via **Moodle Web Services REST API** or direct CLI.
 * Automatically duplicates template course structures (preserving standard course layouts, gradebooks, and activity styles).
 * Injects weekly HTML descriptions, embed players, assignment activities, discussion forums, and quizzes.
@@ -102,6 +110,16 @@ Deliver lecture videos flexibly without vendor lock-in:
 * **LMS Compatibility:** Moodle 4.5+, Moodle 5.x (REST API / CLI)
 * **AI SDKs:** Google Generative AI REST, OpenAI REST, Anthropic REST
 * **Storage Drivers:** Google Drive REST API, Bunny Stream API, AWS S3 SDK
+
+---
+
+## 🔑 Default Login Credentials
+
+| Role | Email | Password | Scope |
+|---|---|---|---|
+| 👑 **Super Admin** | `admin@nextgen.edu` | `Admin@123456` | Platform-wide (manage all universities) |
+| 🏫 **University Admin** | `milton@nextgen.edu` | `Diu@123456` | NextGen University workspace |
+| 👨‍🏫 **Instructor** | `instructor@nextgen.edu` | `Teacher@123456` | Course creation & curriculum review |
 
 ---
 

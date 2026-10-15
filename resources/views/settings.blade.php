@@ -6,8 +6,13 @@
     <div class="col-lg-10 mx-auto">
         <div class="d-flex justify-content-between align-items-center mb-4">
             <div>
-                <h3 class="fw-bold brand-font mb-1">System Configurations & Multi-Engine Settings</h3>
-                <p class="text-muted small mb-0">Configure your Moodle LMS credentials, Multi-AI intelligence providers (Gemini, OpenAI, Claude), Google Drive, and video storage engines.</p>
+                <div class="mb-2">
+                    <span class="badge bg-primary text-white px-3 py-2 rounded-pill fs-6 shadow-sm">
+                        <i class="fa fa-building-columns me-2"></i> Workspace: {{ $university->name }}
+                    </span>
+                </div>
+                <h3 class="fw-bold brand-font mb-1">Institutional Configurations & Multi-Engine Settings</h3>
+                <p class="text-muted small mb-0">Configure Moodle LMS credentials, Multi-AI models, and video CDN storage for <strong>{{ $university->name }}</strong>.</p>
             </div>
             <a href="{{ route('dashboard') }}" class="btn btn-outline-secondary">
                 <i class="fa fa-arrow-left me-1"></i> Back to Dashboard

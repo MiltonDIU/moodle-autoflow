@@ -1,6 +1,25 @@
 @extends('layouts.app')
 
 @section('content')
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <div class="d-flex align-items-center gap-2 mb-1">
+            <span class="badge bg-primary text-white px-3 py-1 rounded-pill">
+                <i class="fa fa-building-columns me-1"></i> {{ $university->name }}
+            </span>
+            <span class="badge bg-light text-secondary border">Institutional Workspace</span>
+        </div>
+        <h3 class="fw-bold brand-font text-dark mb-0">Course Provisioning & Ingestion Studio</h3>
+    </div>
+    @if(auth()->check() && auth()->user()->isSuperAdmin())
+        <div>
+            <a href="{{ route('universities.index') }}" class="btn btn-outline-primary btn-sm">
+                <i class="fa fa-university me-1"></i> Switch / Manage Universities
+            </a>
+        </div>
+    @endif
+</div>
+
 <!-- Metric Cards -->
 <div class="row g-3 mb-4">
     <!-- Stat 1: Courses under Root Folder -->
