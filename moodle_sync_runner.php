@@ -487,12 +487,21 @@ function sync_forum_activity($courseid, $sectionnum, $forumTitle, $discussionDat
 // 2. SYNCHRONIZE GENERAL DOCS (SECTION 0)
 // ---------------------------------------------------------
 foreach ($generalDocs as $doc) {
-    if ($doc['type'] === 'slides') {
-        get_or_create_url($courseid, 0, 'Lecture Slides', $doc['view_url'], '<p>Course Lecture Slides & Presentations</p>');
-    } elseif ($doc['type'] === 'student_handbook') {
-        get_or_create_url($courseid, 0, 'Course Student Handbook', $doc['view_url'], '<p>Official University Student Course Handbook</p>');
-    } elseif ($doc['type'] === 'instructor_handbook') {
-        get_or_create_url($courseid, 0, 'Course Instructor Handbook', $doc['view_url'], '<p>Official University Instructor Handbook & Guidelines</p>');
+    $docType = $doc['type'] ?? 'other';
+    $docLabel = !empty($doc['label']) ? $doc['label'] : (!empty($doc['filename']) ? pathinfo($doc['filename'], PATHINFO_FILENAME) : 'Course Document');
+    $viewUrl = $doc['view_url'] ?? '';
+
+    if (empty($viewUrl)) continue;
+
+    if ($docType === 'slides') {
+        get_or_create_url($courseid, 0, 'Lecture Slides', $viewUrl, '<p>Course Lecture Slides & Presentations</p>');
+    } elseif ($docType === 'student_handbook') {
+        get_or_create_url($courseid, 0, 'Course Student Handbook', $viewUrl, '<p>Official University Student Course Handbook</p>');
+    } elseif ($docType === 'instructor_handbook') {
+        get_or_create_url($courseid, 0, 'Course Instructor Handbook', $viewUrl, '<p>Official University Instructor Handbook & Guidelines</p>');
+    } elseif ($docType !== 'test_bank') {
+        // Automatically sync any custom or additional extra course documents (Lab Manual, Reference Book, etc.)
+        get_or_create_url($courseid, 0, $docLabel, $viewUrl, '<p>Official Course Resource: ' . htmlspecialchars($docLabel) . '</p>');
     }
 }
 echo "✔ Section 0 Course Materials & Documents synchronized.\n";

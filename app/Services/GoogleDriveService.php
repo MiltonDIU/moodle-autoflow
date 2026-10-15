@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use Illuminate\Support\Facades\Http;
+use App\Models\Setting;
 
 class GoogleDriveService
 {
@@ -159,14 +160,58 @@ class GoogleDriveService
         return $videos;
     }
 
-    protected function classifyDocType(string $filename): string
+    public function classifyDocType(string $filename, ?int $universityId = null): array
     {
         $lower = strtolower($filename);
-        if (str_contains($lower, 'student handbo') || str_contains($lower, 'student_handbo')) return 'student_handbook';
-        if (str_contains($lower, 'instructor handbo') || str_contains($lower, 'instructor_handbo')) return 'instructor_handbook';
-        if (str_contains($lower, 'slide') || str_contains($lower, 'lecture') || str_contains($lower, 'presentation')) return 'slides';
-        if (str_contains($lower, 'testbank') || str_contains($lower, 'test bank') || str_contains($lower, 'test-bank') || str_contains($lower, 'question') || str_contains($lower, 'quiz')) return 'test_bank';
-        return 'other';
+        $uniId = Setting::resolveUniversityId($universityId);
+
+        // 1. User-configured custom patterns for the 4 core files
+        $shPattern = strtolower(trim((string) Setting::get('doc_pattern_student_handbook', '', $uniId)));
+        $ihPattern = strtolower(trim((string) Setting::get('doc_pattern_instructor_handbook', '', $uniId)));
+        $tbPattern = strtolower(trim((string) Setting::get('doc_pattern_test_bank', '', $uniId)));
+        $slidePattern = strtolower(trim((string) Setting::get('doc_pattern_slides', '', $uniId)));
+
+        if ($shPattern !== '' && str_contains($lower, $shPattern)) {
+            return ['type' => 'student_handbook', 'label' => 'Course Student Handbook'];
+        }
+        if ($ihPattern !== '' && str_contains($lower, $ihPattern)) {
+            return ['type' => 'instructor_handbook', 'label' => 'Course Instructor Handbook'];
+        }
+        if ($tbPattern !== '' && str_contains($lower, $tbPattern)) {
+            return ['type' => 'test_bank', 'label' => 'Course Test / Question Bank'];
+        }
+        if ($slidePattern !== '' && str_contains($lower, $slidePattern)) {
+            return ['type' => 'slides', 'label' => 'Course Lecture Slides'];
+        }
+
+        // 2. User-configured custom extra document patterns (e.g. Lab Manual, Formula Sheet, Reference)
+        $customJson = Setting::get('doc_custom_mappings', '[]', $uniId);
+        $customMappings = json_decode($customJson, true);
+        if (is_array($customMappings)) {
+            foreach ($customMappings as $mapping) {
+                $pat = strtolower(trim($mapping['pattern'] ?? ''));
+                if ($pat !== '' && str_contains($lower, $pat)) {
+                    $lbl = trim($mapping['label'] ?? '') ?: pathinfo($filename, PATHINFO_FILENAME);
+                    return ['type' => 'custom', 'label' => $lbl];
+                }
+            }
+        }
+
+        // 3. Fallback to smart heuristic detection
+        if (str_contains($lower, 'student handbo') || str_contains($lower, 'student_handbo') || str_contains($lower, 'student-handbo') || str_contains($lower, 'syllabus')) {
+            return ['type' => 'student_handbook', 'label' => 'Course Student Handbook'];
+        }
+        if (str_contains($lower, 'instructor handbo') || str_contains($lower, 'instructor_handbo') || str_contains($lower, 'faculty handbo')) {
+            return ['type' => 'instructor_handbook', 'label' => 'Course Instructor Handbook'];
+        }
+        if (str_contains($lower, 'slide') || str_contains($lower, 'lecture') || str_contains($lower, 'presentation') || str_contains($lower, 'powerpoint')) {
+            return ['type' => 'slides', 'label' => 'Course Lecture Slides'];
+        }
+        if (str_contains($lower, 'testbank') || str_contains($lower, 'test bank') || str_contains($lower, 'test-bank') || str_contains($lower, 'question') || str_contains($lower, 'quiz')) {
+            return ['type' => 'test_bank', 'label' => 'Course Test / Question Bank'];
+        }
+
+        return ['type' => 'other', 'label' => pathinfo($filename, PATHINFO_FILENAME)];
     }
 
     protected function guessCourseCode(string $name): string

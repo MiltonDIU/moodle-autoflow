@@ -78,7 +78,24 @@ class DashboardController extends Controller
 
         $university = $this->getActiveUniversity();
 
-        foreach ($request->except(['_token']) as $key => $val) {
+        // Process custom extra document mappings
+        $customDocs = [];
+        $extraLabels = $request->input('custom_doc_labels', []);
+        $extraPatterns = $request->input('custom_doc_patterns', []);
+        if (is_array($extraLabels)) {
+            foreach ($extraLabels as $idx => $label) {
+                $pat = $extraPatterns[$idx] ?? '';
+                if (!empty(trim($label)) && !empty(trim($pat))) {
+                    $customDocs[] = [
+                        'label' => trim($label),
+                        'pattern' => trim($pat)
+                    ];
+                }
+            }
+        }
+        Setting::set('doc_custom_mappings', json_encode($customDocs), $university->id);
+
+        foreach ($request->except(['_token', 'custom_doc_labels', 'custom_doc_patterns']) as $key => $val) {
             Setting::set($key, $val, $university->id);
         }
 
@@ -160,7 +177,7 @@ class DashboardController extends Controller
 
         try {
             // 1. Scan Drive for files & videos
-            $scanData = $this->driveService->scanCourseFolder($course->gdrive_folder_id);
+            $scanData = $this->driveService->scanCourseFolder($course->gdrive_folder_id, $uniId);
             $course->update(['progress' => 35]);
 
             // 2. Extract Curriculum using selected AI Provider

@@ -218,6 +218,98 @@
                 </div>
             </div>
 
+            <!-- ================= CARD 4: COURSE DOCUMENT NAMING RULES & FILE MAPPINGS ================= -->
+            <div class="custom-card p-4 mb-4" style="border-top: 4px solid #10b981;">
+                <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+                    <div>
+                        <span class="badge bg-success text-white mb-1">Document Discovery & Classification</span>
+                        <h4 class="fw-bold brand-font text-dark mb-0">
+                            <i class="fa fa-file-invoice text-success me-2"></i> 4. Course Document Naming Rules & File Mappings
+                        </h4>
+                    </div>
+                </div>
+                <p class="text-muted small">Specify the filename keywords used across course folders in Google Drive. If a field is left empty, the system automatically uses smart heuristic detection. You can also map extra documents (e.g. Lab Manual, Reference Book) to be provisioned in Moodle Section 0.</p>
+
+                <!-- Core 4 Files Section -->
+                <div class="bg-light p-3 rounded-3 border mb-3">
+                    <h6 class="fw-bold text-dark mb-2"><i class="fa fa-folder-tree text-primary me-2"></i> Standard 4 Core Course Files (Keywords / Filename Patterns)</h6>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label small fw-semibold">1. Student Handbook Filename Keyword</label>
+                            <input type="text" name="doc_pattern_student_handbook" class="form-control form-control-sm font-monospace" value="{{ $settings['doc_pattern_student_handbook'] ?? '' }}" placeholder="Default fallback: student_handbook (or syllabus)">
+                            <small class="text-muted" style="font-size: 0.75rem;">Source for Weekly Overview & Student Learning Objectives.</small>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-semibold">2. Instructor Handbook Filename Keyword</label>
+                            <input type="text" name="doc_pattern_instructor_handbook" class="form-control form-control-sm font-monospace" value="{{ $settings['doc_pattern_instructor_handbook'] ?? '' }}" placeholder="Default fallback: instructor_handbook (or faculty_guide)">
+                            <small class="text-muted" style="font-size: 0.75rem;">Official instructor guidelines provisioned to Section 0.</small>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-semibold">3. Test Bank / Questions Filename Keyword</label>
+                            <input type="text" name="doc_pattern_test_bank" class="form-control form-control-sm font-monospace" value="{{ $settings['doc_pattern_test_bank'] ?? '' }}" placeholder="Default fallback: testbank (or questions, quiz_bank)">
+                            <small class="text-muted" style="font-size: 0.75rem;">Source for Weekly Quizzes, Midterm & Final MCQs.</small>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-semibold">4. Lecture Slides Filename Keyword</label>
+                            <input type="text" name="doc_pattern_slides" class="form-control form-control-sm font-monospace" value="{{ $settings['doc_pattern_slides'] ?? '' }}" placeholder="Default fallback: slide (or lecture, presentation)">
+                            <small class="text-muted" style="font-size: 0.75rem;">Official course slide decks provisioned to Section 0.</small>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Extra / Custom Documents Mapping -->
+                <div class="border rounded-3 p-3 bg-white">
+                    <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+                        <div>
+                            <h6 class="fw-bold text-dark mb-0"><i class="fa fa-plus-circle text-success me-1"></i> Additional / Extra Course Documents Mapping</h6>
+                            <small class="text-muted">Define any additional files (e.g. Lab Manual, Formula Sheet, Project Guidelines) to be synced to Moodle Section 0.</small>
+                        </div>
+                        <button type="button" class="btn btn-sm btn-outline-success" onclick="addCustomDocRow()">
+                            <i class="fa fa-plus me-1"></i> Add Document Mapping
+                        </button>
+                    </div>
+
+                    @php
+                        $customDocs = json_decode($settings['doc_custom_mappings'] ?? '[]', true) ?: [];
+                    @endphp
+
+                    <div class="table-responsive">
+                        <table class="table table-sm table-bordered align-middle mb-0" id="customDocsTable">
+                            <thead class="table-light">
+                                <tr>
+                                    <th style="width: 45%;">Resource Title in Moodle (Section 0)</th>
+                                    <th style="width: 45%;">Google Drive Filename Keyword</th>
+                                    <th class="text-center" style="width: 10%;">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="customDocsBody">
+                                @forelse($customDocs as $cd)
+                                <tr>
+                                    <td>
+                                        <input type="text" name="custom_doc_labels[]" class="form-control form-control-sm" value="{{ $cd['label'] }}" placeholder="e.g. Lab Manual" required>
+                                    </td>
+                                    <td>
+                                        <input type="text" name="custom_doc_patterns[]" class="form-control form-control-sm font-monospace" value="{{ $cd['pattern'] }}" placeholder="e.g. lab_manual" required>
+                                    </td>
+                                    <td class="text-center">
+                                        <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeCustomDocRow(this)">
+                                            <i class="fa fa-trash"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                                @empty
+                                <tr id="noCustomDocsRow">
+                                    <td colspan="3" class="text-center text-muted small py-3">
+                                        <em>No additional custom files mapped. Standard 4 core files will be discovered automatically. Click <strong>"+ Add Document Mapping"</strong> above if you have Lab Manuals or Reference Books.</em>
+                                    </td>
+                                </tr>
+                                @endforelse
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
             <!-- ================= CARD 4: VIDEO STORAGE & STREAMING ENGINE ================= -->
             <div class="custom-card p-4 mb-4" style="border-top: 4px solid #10b981;">
                 <div class="d-flex justify-content-between align-items-center mb-3">
