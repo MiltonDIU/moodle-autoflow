@@ -162,42 +162,67 @@ class GoogleDriveService
 
     public function classifyDocType(string $filename, ?int $universityId = null): array
     {
-        $lower = strtolower($filename);
+        $cleanFn = trim($filename);
+        $lower = strtolower($cleanFn);
+        $lowerNoExt = strtolower(trim(pathinfo($cleanFn, PATHINFO_FILENAME)));
         $uniId = Setting::resolveUniversityId($universityId);
 
-        // 1. User-configured custom patterns for the 4 core files
-        $shPattern = strtolower(trim((string) Setting::get('doc_pattern_student_handbook', '', $uniId)));
-        $ihPattern = strtolower(trim((string) Setting::get('doc_pattern_instructor_handbook', '', $uniId)));
-        $tbPattern = strtolower(trim((string) Setting::get('doc_pattern_test_bank', '', $uniId)));
-        $slidePattern = strtolower(trim((string) Setting::get('doc_pattern_slides', '', $uniId)));
+        // Helper function: tests for exact full name match (with ext), exact base name (without ext), or keyword match
+        $isMatch = function(string $cfgName) use ($lower, $lowerNoExt) {
+            $cfg = strtolower(trim($cfgName));
+            if ($cfg === '') return false;
+            $cfgNoExt = strtolower(trim(pathinfo($cfg, PATHINFO_FILENAME)));
 
-        if ($shPattern !== '' && str_contains($lower, $shPattern)) {
+            // 1. Exact match with extension: e.g. "Course Student Handbook.pdf" === "Course Student Handbook.pdf"
+            if ($lower === $cfg) return true;
+
+            // 2. Exact match without extension: e.g. "Course Student Handbook" === "Course Student Handbook"
+            if ($lowerNoExt === $cfg || $lowerNoExt === $cfgNoExt) return true;
+
+            // 3. Normalized alphanumeric equality: ignores spaces, hyphens, underscores
+            $normFile = preg_replace('/[^a-z0-9]/', '', $lowerNoExt);
+            $normCfg = preg_replace('/[^a-z0-9]/', '', $cfgNoExt);
+            if ($normFile !== '' && $normCfg !== '' && ($normFile === $normCfg || str_contains($normFile, $normCfg))) {
+                return true;
+            }
+
+            // 4. Substring match as fallback
+            return str_contains($lower, $cfg) || str_contains($lower, $cfgNoExt);
+        };
+
+        // 1. User-configured standard exact filenames / patterns for the 4 core files
+        $shPattern = (string) Setting::get('doc_pattern_student_handbook', '', $uniId);
+        $ihPattern = (string) Setting::get('doc_pattern_instructor_handbook', '', $uniId);
+        $tbPattern = (string) Setting::get('doc_pattern_test_bank', '', $uniId);
+        $slidePattern = (string) Setting::get('doc_pattern_slides', '', $uniId);
+
+        if ($isMatch($shPattern)) {
             return ['type' => 'student_handbook', 'label' => 'Course Student Handbook'];
         }
-        if ($ihPattern !== '' && str_contains($lower, $ihPattern)) {
+        if ($isMatch($ihPattern)) {
             return ['type' => 'instructor_handbook', 'label' => 'Course Instructor Handbook'];
         }
-        if ($tbPattern !== '' && str_contains($lower, $tbPattern)) {
+        if ($isMatch($tbPattern)) {
             return ['type' => 'test_bank', 'label' => 'Course Test / Question Bank'];
         }
-        if ($slidePattern !== '' && str_contains($lower, $slidePattern)) {
+        if ($isMatch($slidePattern)) {
             return ['type' => 'slides', 'label' => 'Course Lecture Slides'];
         }
 
-        // 2. User-configured custom extra document patterns (e.g. Lab Manual, Formula Sheet, Reference)
+        // 2. User-configured custom extra documents (exact full name or keyword)
         $customJson = Setting::get('doc_custom_mappings', '[]', $uniId);
         $customMappings = json_decode($customJson, true);
         if (is_array($customMappings)) {
             foreach ($customMappings as $mapping) {
-                $pat = strtolower(trim($mapping['pattern'] ?? ''));
-                if ($pat !== '' && str_contains($lower, $pat)) {
-                    $lbl = trim($mapping['label'] ?? '') ?: pathinfo($filename, PATHINFO_FILENAME);
+                $pat = $mapping['pattern'] ?? '';
+                if ($isMatch($pat)) {
+                    $lbl = trim($mapping['label'] ?? '') ?: pathinfo($cleanFn, PATHINFO_FILENAME);
                     return ['type' => 'custom', 'label' => $lbl];
                 }
             }
         }
 
-        // 3. Fallback to smart heuristic detection
+        // 3. Fallback to smart heuristic detection (when exact names are not configured or file slightly differs)
         if (str_contains($lower, 'student handbo') || str_contains($lower, 'student_handbo') || str_contains($lower, 'student-handbo') || str_contains($lower, 'syllabus')) {
             return ['type' => 'student_handbook', 'label' => 'Course Student Handbook'];
         }
@@ -211,7 +236,7 @@ class GoogleDriveService
             return ['type' => 'test_bank', 'label' => 'Course Test / Question Bank'];
         }
 
-        return ['type' => 'other', 'label' => pathinfo($filename, PATHINFO_FILENAME)];
+        return ['type' => 'other', 'label' => pathinfo($cleanFn, PATHINFO_FILENAME)];
     }
 
     protected function guessCourseCode(string $name): string

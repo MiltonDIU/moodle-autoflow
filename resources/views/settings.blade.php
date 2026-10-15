@@ -232,27 +232,31 @@
 
                 <!-- Core 4 Files Section -->
                 <div class="bg-light p-3 rounded-3 border mb-3">
-                    <h6 class="fw-bold text-dark mb-2"><i class="fa fa-folder-tree text-primary me-2"></i> Standard 4 Core Course Files (Keywords / Filename Patterns)</h6>
+                    <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+                        <h6 class="fw-bold text-dark mb-0"><i class="fa fa-folder-tree text-primary me-2"></i> Standard 4 Core Course Files (Exact Standardized Filenames)</h6>
+                        <span class="badge bg-primary bg-opacity-10 text-primary border border-primary small">Exact Full Filename / Case-Insensitive</span>
+                    </div>
+                    <p class="text-muted small mb-3">Enter the exact standardized filename used across all course subfolders in Google Drive (e.g. <code>Course Student Handbook.pdf</code>). If a folder uses slightly different naming or is left blank, the system automatically uses smart heuristic fallback rules.</p>
                     <div class="row g-3">
                         <div class="col-md-6">
-                            <label class="form-label small fw-semibold">1. Student Handbook Filename Keyword</label>
-                            <input type="text" name="doc_pattern_student_handbook" class="form-control form-control-sm font-monospace" value="{{ $settings['doc_pattern_student_handbook'] ?? '' }}" placeholder="Default fallback: student_handbook (or syllabus)">
-                            <small class="text-muted" style="font-size: 0.75rem;">Source for Weekly Overview & Student Learning Objectives.</small>
+                            <label class="form-label small fw-semibold">1. Student Handbook Exact Filename</label>
+                            <input type="text" name="doc_pattern_student_handbook" class="form-control form-control-sm font-monospace" value="{{ $settings['doc_pattern_student_handbook'] ?? '' }}" placeholder="e.g. Course Student Handbook.pdf">
+                            <small class="text-muted" style="font-size: 0.75rem;">Primary source for Weekly Overviews & Student Learning Objectives (SLOs).</small>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label small fw-semibold">2. Instructor Handbook Filename Keyword</label>
-                            <input type="text" name="doc_pattern_instructor_handbook" class="form-control form-control-sm font-monospace" value="{{ $settings['doc_pattern_instructor_handbook'] ?? '' }}" placeholder="Default fallback: instructor_handbook (or faculty_guide)">
-                            <small class="text-muted" style="font-size: 0.75rem;">Official instructor guidelines provisioned to Section 0.</small>
+                            <label class="form-label small fw-semibold">2. Instructor Handbook Exact Filename</label>
+                            <input type="text" name="doc_pattern_instructor_handbook" class="form-control form-control-sm font-monospace" value="{{ $settings['doc_pattern_instructor_handbook'] ?? '' }}" placeholder="e.g. Course Instructor Handbook.pdf">
+                            <small class="text-muted" style="font-size: 0.75rem;">Official faculty guidelines provisioned as a resource in Moodle Section 0.</small>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label small fw-semibold">3. Test Bank / Questions Filename Keyword</label>
-                            <input type="text" name="doc_pattern_test_bank" class="form-control form-control-sm font-monospace" value="{{ $settings['doc_pattern_test_bank'] ?? '' }}" placeholder="Default fallback: testbank (or questions, quiz_bank)">
-                            <small class="text-muted" style="font-size: 0.75rem;">Source for Weekly Quizzes, Midterm & Final MCQs.</small>
+                            <label class="form-label small fw-semibold">3. Test Bank / Questions Exact Filename</label>
+                            <input type="text" name="doc_pattern_test_bank" class="form-control form-control-sm font-monospace" value="{{ $settings['doc_pattern_test_bank'] ?? '' }}" placeholder="e.g. testbank.docx (or Question Bank.docx)">
+                            <small class="text-muted" style="font-size: 0.75rem;">Source for Weekly Quizzes, Midterm Exam & Final Exam MCQs.</small>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label small fw-semibold">4. Lecture Slides Filename Keyword</label>
-                            <input type="text" name="doc_pattern_slides" class="form-control form-control-sm font-monospace" value="{{ $settings['doc_pattern_slides'] ?? '' }}" placeholder="Default fallback: slide (or lecture, presentation)">
-                            <small class="text-muted" style="font-size: 0.75rem;">Official course slide decks provisioned to Section 0.</small>
+                            <label class="form-label small fw-semibold">4. Lecture Slides Exact Filename</label>
+                            <input type="text" name="doc_pattern_slides" class="form-control form-control-sm font-monospace" value="{{ $settings['doc_pattern_slides'] ?? '' }}" placeholder="e.g. Lecture Slides.pptx (or Lecture Slides.pdf)">
+                            <small class="text-muted" style="font-size: 0.75rem;">Course presentations provisioned as a resource in Moodle Section 0.</small>
                         </div>
                     </div>
                 </div>
@@ -278,7 +282,7 @@
                             <thead class="table-light">
                                 <tr>
                                     <th style="width: 45%;">Resource Title in Moodle (Section 0)</th>
-                                    <th style="width: 45%;">Google Drive Filename Keyword</th>
+                                    <th style="width: 45%;">Exact Filename in Google Drive (e.g. Lab Manual.pdf)</th>
                                     <th class="text-center" style="width: 10%;">Action</th>
                                 </tr>
                             </thead>
@@ -289,7 +293,7 @@
                                         <input type="text" name="custom_doc_labels[]" class="form-control form-control-sm" value="{{ $cd['label'] }}" placeholder="e.g. Lab Manual" required>
                                     </td>
                                     <td>
-                                        <input type="text" name="custom_doc_patterns[]" class="form-control form-control-sm font-monospace" value="{{ $cd['pattern'] }}" placeholder="e.g. lab_manual" required>
+                                        <input type="text" name="custom_doc_patterns[]" class="form-control form-control-sm font-monospace" value="{{ $cd['pattern'] }}" placeholder="e.g. Chemistry Lab Manual.pdf" required>
                                     </td>
                                     <td class="text-center">
                                         <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeCustomDocRow(this)">
