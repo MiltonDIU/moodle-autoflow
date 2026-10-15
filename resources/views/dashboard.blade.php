@@ -7,17 +7,49 @@
             <span class="badge bg-primary text-white px-3 py-1 rounded-pill">
                 <i class="fa fa-building-columns me-1"></i> {{ $university->name }}
             </span>
-            <span class="badge bg-light text-secondary border">Institutional Workspace</span>
+            @if(auth()->user()->isSuperAdmin())
+                <span class="badge bg-danger text-white"><i class="fa fa-crown me-1"></i> Super Admin (Platform Owner)</span>
+            @elseif(auth()->user()->isUniversityAdmin())
+                <span class="badge bg-primary text-white"><i class="fa fa-shield-alt me-1"></i> University Admin (Institution Manager)</span>
+            @else
+                <span class="badge bg-success text-white"><i class="fa fa-chalkboard-teacher me-1"></i> Instructor (Course Author)</span>
+            @endif
         </div>
         <h3 class="fw-bold brand-font text-dark mb-0">Course Provisioning & Ingestion Studio</h3>
     </div>
-    @if(auth()->check() && auth()->user()->isSuperAdmin())
-        <div>
-            <a href="{{ route('universities.index') }}" class="btn btn-outline-primary btn-sm">
-                <i class="fa fa-university me-1"></i> Switch / Manage Universities
+    <div class="d-flex gap-2">
+        @if(auth()->check() && auth()->user()->isSuperAdmin())
+            <a href="{{ route('universities.index') }}" class="btn btn-primary-custom btn-sm">
+                <i class="fa fa-university me-1"></i> Manage Institutions
             </a>
-        </div>
-    @endif
+        @endif
+    </div>
+</div>
+
+<!-- Role Permission Summary Strip -->
+<div class="alert alert-light border rounded-3 p-3 mb-4 shadow-sm d-flex justify-content-between align-items-center flex-wrap gap-2">
+    <div class="d-flex align-items-center gap-2">
+        <span class="text-muted small fw-bold text-uppercase"><i class="fa fa-user-shield me-1 text-primary"></i> Your Role Permissions:</span>
+        @if(auth()->user()->isSuperAdmin())
+            <span class="badge bg-success-subtle text-success border border-success-subtle"><i class="fa fa-check me-1"></i> Create Universities</span>
+            <span class="badge bg-success-subtle text-success border border-success-subtle"><i class="fa fa-check me-1"></i> Switch Workspaces</span>
+            <span class="badge bg-success-subtle text-success border border-success-subtle"><i class="fa fa-check me-1"></i> Edit All Settings</span>
+            <span class="badge bg-success-subtle text-success border border-success-subtle"><i class="fa fa-check me-1"></i> Provision Courses</span>
+        @elseif(auth()->user()->isUniversityAdmin())
+            <span class="badge bg-danger-subtle text-danger border border-danger-subtle"><i class="fa fa-times me-1"></i> Multi-University Governance (Super Admin Only)</span>
+            <span class="badge bg-success-subtle text-success border border-success-subtle"><i class="fa fa-check me-1"></i> Edit Moodle & AI Settings</span>
+            <span class="badge bg-success-subtle text-success border border-success-subtle"><i class="fa fa-check me-1"></i> Scan & Ingest Courses</span>
+            <span class="badge bg-success-subtle text-success border border-success-subtle"><i class="fa fa-check me-1"></i> Sync Moodle</span>
+        @else
+            <span class="badge bg-danger-subtle text-danger border border-danger-subtle"><i class="fa fa-times me-1"></i> University Creation Restricted</span>
+            <span class="badge bg-warning-subtle text-warning border border-warning-subtle"><i class="fa fa-lock me-1"></i> Institutional Settings (Read-Only)</span>
+            <span class="badge bg-success-subtle text-success border border-success-subtle"><i class="fa fa-check me-1"></i> Ingest Drive Courses</span>
+            <span class="badge bg-success-subtle text-success border border-success-subtle"><i class="fa fa-check me-1"></i> Review 16-Week Curriculum</span>
+        @endif
+    </div>
+    <div class="small text-muted">
+        Logged in as: <strong>{{ auth()->user()->name }}</strong> ({{ auth()->user()->email }})
+    </div>
 </div>
 
 <!-- Metric Cards -->

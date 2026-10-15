@@ -14,6 +14,17 @@
                 <h3 class="fw-bold brand-font mb-1">Institutional Configurations & Multi-Engine Settings</h3>
                 <p class="text-muted small mb-0">Configure Moodle LMS credentials, Multi-AI models, and video CDN storage for <strong>{{ $university->name }}</strong>.</p>
             </div>
+        </div>
+
+        @if(auth()->user()->isInstructor())
+            <div class="alert alert-warning border-warning shadow-sm rounded-3 mb-4 d-flex align-items-center">
+                <i class="fa fa-lock fs-3 text-warning me-3"></i>
+                <div>
+                    <h6 class="fw-bold mb-1">Read-Only Access for Instructors</h6>
+                    <small>You are currently logged in with the <strong>Instructor</strong> role. You can inspect institutional Moodle connections and AI models, but modifying or saving credentials requires <strong>University Admin</strong> or <strong>Super Admin</strong> authorization.</small>
+                </div>
+            </div>
+        @endif
             <a href="{{ route('dashboard') }}" class="btn btn-outline-secondary">
                 <i class="fa fa-arrow-left me-1"></i> Back to Dashboard
             </a>
@@ -286,9 +297,15 @@
 
             <!-- Save Action Button -->
             <div class="text-end mb-5">
-                <button type="submit" class="btn btn-primary-custom px-5 py-3 fs-5 shadow">
-                    <i class="fa fa-save me-2"></i> Save All Configurations
-                </button>
+                @if(auth()->user()->canManageSettings())
+                    <button type="submit" class="btn btn-primary-custom px-5 py-3 fs-5 shadow">
+                        <i class="fa fa-save me-2"></i> Save All Configurations
+                    </button>
+                @else
+                    <button type="button" class="btn btn-secondary px-5 py-3 fs-5 shadow opacity-75" disabled title="Instructors cannot alter institutional credentials">
+                        <i class="fa fa-lock me-2"></i> Read-Only (Instructors Cannot Save)
+                    </button>
+                @endif
             </div>
         </form>
     </div>

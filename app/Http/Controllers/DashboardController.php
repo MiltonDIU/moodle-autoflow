@@ -72,6 +72,10 @@ class DashboardController extends Controller
 
     public function saveSettings(Request $request)
     {
+        if (!auth()->user()->canManageSettings()) {
+            return redirect()->route('settings')->with('error', 'Access Denied: Instructors do not have permission to modify institutional settings.');
+        }
+
         $university = $this->getActiveUniversity();
 
         foreach ($request->except(['_token']) as $key => $val) {

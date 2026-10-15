@@ -181,13 +181,17 @@
                     </li>
                     <li class="nav-item">
                         <a class="nav-link px-3 {{ request()->routeIs('settings') ? 'active fw-bold text-white' : '' }}" href="{{ route('settings') }}">
-                            <i class="fa fa-sliders me-1"></i> Configurations
+                            @if(auth()->check() && !auth()->user()->isUniversityAdmin() && !auth()->user()->isSuperAdmin())
+                                <i class="fa fa-lock me-1 text-warning"></i> Settings <span class="badge bg-warning text-dark" style="font-size: 0.65rem;">Read-Only</span>
+                            @else
+                                <i class="fa fa-sliders me-1"></i> Configurations
+                            @endif
                         </a>
                     </li>
                     @if(auth()->check() && auth()->user()->isSuperAdmin())
                         <li class="nav-item">
                             <a class="nav-link px-3 {{ request()->routeIs('universities.*') ? 'active fw-bold text-white' : '' }}" href="{{ route('universities.index') }}">
-                                <i class="fa fa-university me-1"></i> Institutions
+                                <i class="fa fa-university me-1 text-warning"></i> Institutions <span class="badge bg-danger" style="font-size: 0.65rem;">Super Admin</span>
                             </a>
                         </li>
                     @endif

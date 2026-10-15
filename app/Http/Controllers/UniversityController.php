@@ -9,8 +9,16 @@ use Illuminate\Support\Str;
 
 class UniversityController extends Controller
 {
+    protected function checkSuperAdmin()
+    {
+        if (!auth()->check() || !auth()->user()->isSuperAdmin()) {
+            abort(403, 'Access Denied: Only System Super Admins have permission to manage institutions.');
+        }
+    }
+
     public function index()
     {
+        $this->checkSuperAdmin();
         $universities = University::withCount(['courses', 'users'])->latest()->get();
         $activeUniId = session('active_university_id', auth()->user()->university_id ?: 1);
 
@@ -19,6 +27,8 @@ class UniversityController extends Controller
 
     public function store(Request $request)
     {
+        $this->checkSuperAdmin();
+
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'domain' => 'nullable|string|max:255',
@@ -56,10 +66,7 @@ class UniversityController extends Controller
 
     public function switchUniversity(Request $request, $id)
     {
-        $user = auth()->user();
-        if (!$user->isSuperAdmin()) {
-            return redirect()->back()->with('error', 'Only System Super Admins can switch between universities.');
-        }
+        $this->checkSuperAdmin();
 
         $uni = University::findOrFail($id);
         session(['active_university_id' => $uni->id]);

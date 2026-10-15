@@ -46,12 +46,22 @@ class User extends Authenticatable
 
     public function isUniversityAdmin(): bool
     {
-        return in_array($this->role, ['super_admin', 'university_admin']);
+        return $this->role === 'university_admin';
     }
 
     public function isInstructor(): bool
     {
-        return in_array($this->role, ['super_admin', 'university_admin', 'instructor']);
+        return $this->role === 'instructor';
+    }
+
+    public function canManageSettings(): bool
+    {
+        return in_array($this->role, ['super_admin', 'university_admin']);
+    }
+
+    public function canManageUniversities(): bool
+    {
+        return $this->role === 'super_admin';
     }
 
     public function getRoleBadgeClass(): string
