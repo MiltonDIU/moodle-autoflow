@@ -111,6 +111,11 @@ class DashboardController extends Controller
             $moodleUrl = $request->input('moodle_url') ?: Setting::get('moodle_url', 'http://elearn.local', $university->id);
             $moodleToken = $request->input('moodle_token') ?: Setting::get('moodle_token', '', $university->id);
             $res = $this->moodleService->testConnection($moodleUrl, $moodleToken);
+        } elseif ($target === 'gdrive' || $target === 'google_drive') {
+            $folderId = $request->input('folder_id') ?: $request->input('gdrive_root_folder_id') ?: Setting::get('gdrive_root_folder_id', '', $university->id);
+            $serviceAccountJson = $request->input('service_account_json') ?: $request->input('gdrive_service_account_json') ?: Setting::get('gdrive_service_account_json', '', $university->id);
+            $apiKey = $request->input('api_key') ?: $request->input('gdrive_api_key') ?: Setting::get('gdrive_api_key', '', $university->id);
+            $res = $this->driveService->testConnection($folderId, $serviceAccountJson, $apiKey, $university->id);
         } elseif (in_array($target, ['gemini', 'openai', 'claude', 'local', 'ai'])) {
             $provider = ($target === 'ai') ? Setting::get('ai_provider', 'gemini', $university->id) : $target;
             $apiKey = $request->input('api_key') ?: $request->input($provider . '_api_key') ?: Setting::get($provider . '_api_key', '', $university->id);
@@ -139,7 +144,7 @@ class DashboardController extends Controller
             Setting::set('gdrive_root_folder_id', $folderId, $university->id);
         }
 
-        $discovered = $this->driveService->discoverCourses($folderId);
+        $discovered = $this->driveService->discoverCourses($folderId, $university->id);
 
         $savedCount = 0;
         foreach ($discovered as $c) {

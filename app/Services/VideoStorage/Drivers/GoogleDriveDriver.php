@@ -3,6 +3,7 @@
 namespace App\Services\VideoStorage\Drivers;
 
 use App\Services\VideoStorage\Contracts\VideoStorageDriverInterface;
+use App\Services\GoogleDriveService;
 
 class GoogleDriveDriver implements VideoStorageDriverInterface
 {
@@ -32,9 +33,7 @@ class GoogleDriveDriver implements VideoStorageDriverInterface
 
     public function testConnection(): array
     {
-        return [
-            'success' => true,
-            'message' => 'Google Drive direct links are active and ready.'
-        ];
+        $driveService = new GoogleDriveService();
+        return $driveService->testConnection();
     }
 }

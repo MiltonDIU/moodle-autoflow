@@ -199,21 +199,86 @@
                 </div>
             </div>
 
-            <!-- ================= CARD 3: GOOGLE DRIVE INGESTION ================= -->
+            <!-- ================= CARD 3: GOOGLE DRIVE INGESTION & ACCESS CREDENTIALS ================= -->
             <div class="custom-card p-4 mb-4" style="border-top: 4px solid #0ea5e9;">
-                <h4 class="fw-bold brand-font text-dark mb-2">
-                    <i class="fa fa-google-drive text-info me-2"></i> 3. Google Drive Ingestion Pipeline
-                </h4>
-                <p class="text-muted small">The parent root folder where all course folders (containing documents and Videos/) reside.</p>
+                <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+                    <div>
+                        <span class="badge bg-info text-dark mb-1">Source Repository</span>
+                        <h4 class="fw-bold brand-font text-dark mb-0">
+                            <i class="fa fa-google-drive text-info me-2"></i> 3. Google Drive Ingestion & Access Credentials
+                        </h4>
+                    </div>
+                    <button type="button" class="btn btn-outline-info" id="btnTestDrive" onclick="window.testDrive(event)">
+                        <i class="fa fa-check-circle me-1"></i> Test Drive Connection
+                    </button>
+                </div>
+                <p class="text-muted small">Configure the course parent root folder and choose access mode (Public Folder or Private / Institutional Drive with Google Service Account).</p>
 
-                <div class="row g-3">
+                <div id="driveStatusAlert" class="mb-3 d-none"></div>
+
+                <div class="row g-3 mb-4">
                     <div class="col-md-12">
                         <label class="form-label fw-semibold small">Default Google Drive Root Folder ID <span class="text-danger">*</span></label>
                         <div class="input-group">
                             <span class="input-group-text bg-light"><i class="fa fa-folder-open text-primary"></i></span>
-                            <input type="text" name="gdrive_root_folder_id" class="form-control font-monospace" value="{{ $settings['gdrive_root_folder_id'] }}" placeholder="e.g. 1BcFVmPVoN9HMPSUNw1vqnOuPYKkDPcnR" required>
+                            <input type="text" name="gdrive_root_folder_id" id="gdriveRootFolderId" class="form-control font-monospace" value="{{ $settings['gdrive_root_folder_id'] }}" placeholder="e.g. 1BcFVmPVoN9HMPSUNw1vqnOuPYKkDPcnR" required>
                         </div>
-                        <small class="text-muted">When you click <strong>"Scan Drive"</strong> on the dashboard, the system scans this root folder to detect courses.</small>
+                        <small class="text-muted">The parent root folder where all course folders reside. When clicking <strong>"Scan Drive"</strong> on the dashboard, this folder is queried.</small>
+                    </div>
+                </div>
+
+                <!-- Google Drive Access / Credentials Options -->
+                <div class="border rounded-3 p-3 bg-light">
+                    <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+                        <h6 class="fw-bold text-dark mb-0">
+                            <i class="fa fa-shield-alt text-primary me-2"></i> Google Drive Authentication & Access Mode
+                        </h6>
+                        <span class="badge bg-primary bg-opacity-10 text-primary border border-primary small">
+                            Institutional & Private Folders Support
+                        </span>
+                    </div>
+                    <p class="text-muted small mb-3">
+                        If your university course folder is private, requires login, or is stored in a Google Workspace Shared Drive, provide a <strong>Google Service Account JSON key</strong> below. For public folders (<em>"Anyone with the link can view"</em>), no credentials are required.
+                    </p>
+
+                    @php
+                        $activeClientEmail = App\Services\GoogleDriveService::getServiceAccountEmail($settings['gdrive_service_account_json'] ?? '');
+                    @endphp
+
+                    @if($activeClientEmail)
+                    <div class="alert alert-success d-flex align-items-center py-2 px-3 mb-3 small">
+                        <i class="fa fa-check-circle fs-5 me-2 text-success"></i>
+                        <div>
+                            <strong>Active Service Account Connected:</strong> 
+                            <code class="user-select-all bg-white px-2 py-1 rounded border ms-1 fw-bold text-dark">{{ $activeClientEmail }}</code>
+                            <div class="text-muted mt-1" style="font-size: 0.78rem;">
+                                Ensure your private Google Drive course folders are shared with this email as <strong>Viewer</strong>.
+                            </div>
+                        </div>
+                    </div>
+                    @endif
+
+                    <div class="row g-3">
+                        <div class="col-md-12">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <label class="form-label small fw-semibold mb-0">
+                                    Google Service Account JSON Key <span class="badge bg-secondary ms-1">Recommended for Private Folders</span>
+                                </label>
+                                <small class="text-muted">Download JSON key from Google Cloud Console &rarr; Service Accounts</small>
+                            </div>
+                            <textarea name="gdrive_service_account_json" id="gdriveServiceAccountJson" class="form-control font-monospace" rows="5" placeholder='{"type": "service_account", "project_id": "...", "private_key_id": "...", "private_key": "-----BEGIN RSA PRIVATE KEY-----\n...", "client_email": "...", ...}' style="font-size: 0.8rem; background: #fff;">{{ $settings['gdrive_service_account_json'] ?? '' }}</textarea>
+                            <div class="form-text small text-muted">
+                                <i class="fa fa-info-circle text-info me-1"></i> <strong>How to connect Private / Institutional Folders:</strong>
+                                1. In Google Cloud Console, create a free Service Account and download its JSON key.<br>
+                                2. Open Google Drive, right-click your course root folder &rarr; <strong>Share</strong> &rarr; add the Service Account's <code>client_email</code> with <strong>Viewer</strong> access.<br>
+                                3. Paste the JSON key here and click <strong>"Test Drive Connection"</strong> above.
+                            </div>
+                        </div>
+
+                        <div class="col-md-12 mt-2">
+                            <label class="form-label small fw-semibold">Google Drive API Key (Optional / Public API quota boost)</label>
+                            <input type="password" name="gdrive_api_key" id="gdriveApiKey" class="form-control form-control-sm font-monospace" value="{{ $settings['gdrive_api_key'] ?? '' }}" placeholder="AIzaSy...">
+                        </div>
                     </div>
                 </div>
             </div>
@@ -522,6 +587,63 @@
         });
     }
 
+    // --- TEST GOOGLE DRIVE CONNECTION ---
+    window.testDrive = function(e) {
+        if (e && e.preventDefault) e.preventDefault();
+        const btn = document.getElementById('btnTestDrive');
+        const alertBox = document.getElementById('driveStatusAlert');
+        if (!btn || !alertBox) return;
+
+        const originalText = btn.innerHTML;
+        const folderId = (document.getElementById('gdriveRootFolderId') || {}).value || '';
+        const saJson = (document.getElementById('gdriveServiceAccountJson') || {}).value || '';
+        const apiKey = (document.getElementById('gdriveApiKey') || {}).value || '';
+
+        btn.innerHTML = '<i class="fa fa-spinner fa-spin me-1"></i> Testing Drive...';
+        btn.disabled = true;
+
+        alertBox.className = 'mb-3 alert alert-info';
+        alertBox.innerHTML = '<i class="fa fa-spinner fa-spin me-2"></i> Connecting to Google Drive... Validating folder accessibility.';
+        alertBox.classList.remove('d-none');
+
+        fetch('/settings/test', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRF-TOKEN': '{{ csrf_token() }}'
+            },
+            body: JSON.stringify({
+                target: 'gdrive',
+                folder_id: folderId,
+                service_account_json: saJson,
+                api_key: apiKey
+            })
+        })
+        .then(function(res) {
+            return res.json().catch(function() {
+                return { success: false, message: 'Server returned HTTP ' + res.status };
+            });
+        })
+        .then(function(data) {
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+            alertBox.className = 'mb-3 alert ' + (data.success ? 'alert-success' : 'alert-danger');
+            let icon = data.success ? 'fa-check-circle' : 'fa-times-circle';
+            let extra = '';
+            if (data.client_email) {
+                extra = '<div class="mt-1 small text-dark"><strong>Authenticated as:</strong> <code>' + data.client_email + '</code></div>';
+            }
+            alertBox.innerHTML = '<i class="fa ' + icon + ' me-2"></i> ' + (data.message || 'Completed') + extra;
+        })
+        .catch(function(err) {
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+            alertBox.className = 'mb-3 alert alert-danger';
+            alertBox.innerHTML = '<i class="fa fa-times-circle me-2"></i> Network Request Error: ' + err.message;
+        });
+    };
+
     // --- TEST MOODLE FUNCTION ---
     window.testMoodle = function(e) {
         if (e && e.preventDefault) e.preventDefault();
@@ -681,6 +803,9 @@
 
     // Also attach standard event listeners on DOM ready for standard behavior
     document.addEventListener('DOMContentLoaded', function() {
+        const btnDrive = document.getElementById('btnTestDrive');
+        if (btnDrive) btnDrive.addEventListener('click', window.testDrive);
+
         const btnMoodle = document.getElementById('btnTestMoodle');
         if (btnMoodle) btnMoodle.addEventListener('click', window.testMoodle);
 
