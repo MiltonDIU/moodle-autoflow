@@ -162,10 +162,10 @@ class GoogleDriveService
     protected function classifyDocType(string $filename): string
     {
         $lower = strtolower($filename);
-        if (str_contains($lower, 'student handbo')) return 'student_handbook';
-        if (str_contains($lower, 'instructor handbo')) return 'instructor_handbook';
-        if (str_contains($lower, 'slide')) return 'slides';
-        if (str_contains($lower, 'test bank')) return 'test_bank';
+        if (str_contains($lower, 'student handbo') || str_contains($lower, 'student_handbo')) return 'student_handbook';
+        if (str_contains($lower, 'instructor handbo') || str_contains($lower, 'instructor_handbo')) return 'instructor_handbook';
+        if (str_contains($lower, 'slide') || str_contains($lower, 'lecture') || str_contains($lower, 'presentation')) return 'slides';
+        if (str_contains($lower, 'testbank') || str_contains($lower, 'test bank') || str_contains($lower, 'test-bank') || str_contains($lower, 'question') || str_contains($lower, 'quiz')) return 'test_bank';
         return 'other';
     }
 
