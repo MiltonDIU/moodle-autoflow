@@ -57,6 +57,7 @@ class Setting extends Model
             'semester_start_date' => date('Y-m-d'),
             'gdrive_root_folder_id' => '',
             'ai_provider' => 'gemini',
+            'ai_system_prompt' => static::getDefaultAiPrompt(),
             'gemini_api_key' => '',
             'gemini_model' => 'gemini-2.5-flash',
             'openai_api_key' => '',
@@ -82,5 +83,54 @@ class Setting extends Model
 
         // Strict Multi-Tenant Isolation: Do NOT leak University 1 (NextGen) settings to other institutions
         return array_merge($defaults, $saved);
+    }
+}
+
+    public static function getDefaultAiPrompt(): string
+    {
+        return <<<EOT
+You are an expert university curriculum instructional designer and LMS content architect.
+Create a comprehensive, realistic 16-week course curriculum for: {course_name}.
+
+University Guidelines & Pedagogical Standards:
+1. Extract authentic, verbatim information from course handbooks and syllabus materials where available.
+2. Adhere to Bloom's Taxonomy standards for student learning objectives and weekly assignments.
+3. Every week must include:
+   - Module Title and Comprehensive Overview
+   - 3-5 Specific Student Learning Objectives
+   - Key Academic Terms & Definitions
+   - Engaging Discussion Prompt for the Weekly Forum
+   - Practical Assignment Task with Evaluation Criteria & Rubric
+   - 5-10 Knowledge Check Multiple-Choice Questions (MCQs) with options A-D, correct answer, and explanation.
+4. Week 08 is designated as the Midterm Examination.
+5. Week 16 is designated as the Final Comprehensive Examination & Capstone Assessment.
+
+Return ONLY strict valid JSON matching this schema:
+{
+  "weeks": {
+    "1": {
+      "week_num": 1,
+      "title": "Module Title",
+      "overview": "Module Overview text...",
+      "objectives": ["Objective 1", "Objective 2", "Objective 3"],
+      "key_terms": ["Term 1: definition", "Term 2: definition"],
+      "discussion": "Weekly discussion topic and prompt for students...",
+      "assignment": {
+        "task": "Assignment task instructions...",
+        "blooms_level": "Analyze, Apply, Evaluate",
+        "rubric_raw": "Evaluation Criteria & Grading Rubric..."
+      },
+      "mcqs": [
+        {
+          "question": "Question text?",
+          "options": ["A) Option 1", "B) Option 2", "C) Option 3", "D) Option 4"],
+          "answer": "Correct answer text",
+          "explanation": "Detailed explanation..."
+        }
+      ]
+    }
+  }
+}
+EOT;
     }
 }

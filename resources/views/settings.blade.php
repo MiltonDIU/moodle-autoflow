@@ -172,6 +172,31 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- Dynamic Institutional AI Guidelines & System Prompt -->
+                <div class="mt-4 pt-3 border-top">
+                    <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+                        <div>
+                            <h6 class="fw-bold text-dark mb-0">
+                                <i class="fa fa-scroll text-primary me-2"></i> Institutional AI Curriculum Prompt & Pedagogical Guidelines
+                            </h6>
+                            <small class="text-muted">Configure university-specific curriculum rules, Bloom's Taxonomy standards, or assessment policies. Use <code>{course_name}</code> as dynamic placeholder.</small>
+                        </div>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="resetDefaultAiPrompt()">
+                            <i class="fa fa-rotate-left me-1"></i> Reset to Recommended Template
+                        </button>
+                    </div>
+
+                    <textarea name="ai_system_prompt" id="aiSystemPrompt" class="form-control font-monospace" rows="13" style="font-size: 0.82rem; line-height: 1.5; background: #f8fafc; border: 1px solid #cbd5e1;">{{ $settings['ai_system_prompt'] ?? App\Models\Setting::getDefaultAiPrompt() }}</textarea>
+
+                    <div class="d-flex align-items-center gap-2 mt-2 flex-wrap">
+                        <span class="small text-muted fw-bold">Supported Tags:</span>
+                        <span class="badge bg-light text-primary border font-monospace">{course_name}</span>
+                        <span class="badge bg-light text-secondary border font-monospace">16 Weeks Structure</span>
+                        <span class="badge bg-light text-success border">Bloom's Taxonomy Compliant</span>
+                        <span class="badge bg-light text-purple border" style="color: #6366f1;">JSON Schema</span>
+                    </div>
+                </div>
             </div>
 
             <!-- ================= CARD 3: GOOGLE DRIVE INGESTION ================= -->

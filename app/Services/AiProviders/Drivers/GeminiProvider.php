@@ -78,31 +78,15 @@ class GeminiProvider implements AiProviderInterface
 
     protected function buildPrompt(string $courseName, array $documents): string
     {
-        return <<<EOT
-You are an expert university curriculum instructional designer. Create a comprehensive, realistic 16-week course curriculum for: {$courseName}.
-Return strict JSON:
-{
-  "weeks": {
-    "1": {
-      "week_num": 1,
-      "title": "Module Title",
-      "overview": "Overview text",
-      "objectives": ["Objective 1", "Objective 2", "Objective 3"],
-      "key_terms": ["Term 1: definition", "Term 2: definition"],
-      "discussion": "Weekly discussion prompt",
-      "assignment": "Written assignment task description",
-      "mcqs": [
-        {
-          "question": "Question text?",
-          "options": ["A) opt 1", "B) opt 2", "C) opt 3", "D) opt 4"],
-          "answer": "Correct answer",
-          "explanation": "Explanation"
+        $template = Setting::get('ai_system_prompt') ?: Setting::getDefaultAiPrompt();
+        $prompt = str_replace('{course_name}', $courseName, $template);
+
+        if (!empty($documents)) {
+            $prompt .= "\n\nAvailable Course Handbook Documents:\n";
+            foreach ($documents as $doc) {
+                $prompt .= "- " . ($doc['filename'] ?? 'Course Document') . "\n";
+            }
         }
-      ]
-    }
-  }
-}
-Generate for all 16 weeks (Week 8 is Midterm Exam, Week 16 is Final Comprehensive Exam & Project).
-EOT;
+        return $prompt;
     }
 }

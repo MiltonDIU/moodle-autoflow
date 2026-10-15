@@ -24,7 +24,8 @@ class ClaudeProvider implements AiProviderInterface
             return $local->extractCurriculum($documents, $courseName);
         }
 
-        $prompt = "Create a complete, realistic 16-week university syllabus for '{$courseName}'. Format as a strict JSON object with a 'weeks' map containing keys '1' through '16' with: week_num, title, overview, objectives (array), key_terms (array), discussion, assignment, mcqs (array of question, options, answer, explanation). Week 8 is Midterm, Week 16 is Final Exam. Output ONLY raw JSON.";
+        $template = Setting::get('ai_system_prompt') ?: Setting::getDefaultAiPrompt();
+        $prompt = str_replace('{course_name}', $courseName, $template);
 
         $response = Http::withHeaders([
             'x-api-key' => $this->apiKey,
