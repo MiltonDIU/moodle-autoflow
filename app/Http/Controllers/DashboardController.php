@@ -115,7 +115,8 @@ class DashboardController extends Controller
             $folderId = $request->input('folder_id') ?: $request->input('gdrive_root_folder_id') ?: Setting::get('gdrive_root_folder_id', '', $university->id);
             $serviceAccountJson = $request->input('service_account_json') ?: $request->input('gdrive_service_account_json') ?: Setting::get('gdrive_service_account_json', '', $university->id);
             $apiKey = $request->input('api_key') ?: $request->input('gdrive_api_key') ?: Setting::get('gdrive_api_key', '', $university->id);
-            $res = $this->driveService->testConnection($folderId, $serviceAccountJson, $apiKey, $university->id);
+            $authType = $request->input('auth_type') ?: $request->input('gdrive_auth_type') ?: Setting::get('gdrive_auth_type', 'public', $university->id);
+            $res = $this->driveService->testConnection($folderId, $serviceAccountJson, $apiKey, $university->id, $authType);
         } elseif (in_array($target, ['gemini', 'openai', 'claude', 'local', 'ai'])) {
             $provider = ($target === 'ai') ? Setting::get('ai_provider', 'gemini', $university->id) : $target;
             $apiKey = $request->input('api_key') ?: $request->input($provider . '_api_key') ?: Setting::get($provider . '_api_key', '', $university->id);

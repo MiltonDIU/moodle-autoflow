@@ -153,8 +153,10 @@ class GoogleDriveService
     {
         $uniId = Setting::resolveUniversityId($universityId);
 
-        // 1. Try Authenticated Google Drive API v3 if credentials exist
-        if ($this->hasCredentials($uniId)) {
+        $authType = Setting::get('gdrive_auth_type', 'public', $uniId);
+
+        // 1. If Private mode (or credentials configured), use Authenticated Google Drive API v3
+        if ($authType === 'private' || ($authType !== 'public' && $this->hasCredentials($uniId))) {
             try {
                 $params = [
                     'q' => "'{$rootFolderId}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false",
@@ -251,8 +253,10 @@ class GoogleDriveService
     {
         $uniId = Setting::resolveUniversityId($universityId);
 
-        // 1. Try Authenticated Google Drive API v3
-        if ($this->hasCredentials($uniId)) {
+        $authType = Setting::get('gdrive_auth_type', 'public', $uniId);
+
+        // 1. If Private mode (or credentials configured), use Authenticated Google Drive API v3
+        if ($authType === 'private' || ($authType !== 'public' && $this->hasCredentials($uniId))) {
             try {
                 $params = [
                     'q' => "'{$courseFolderId}' in parents and trashed = false",
@@ -568,10 +572,11 @@ class GoogleDriveService
     /**
      * Test connection to Google Drive root folder & validate credentials
      */
-    public function testConnection(?string $folderId = null, ?string $serviceAccountJson = null, ?string $apiKey = null, ?int $universityId = null): array
+    public function testConnection(?string $folderId = null, ?string $serviceAccountJson = null, ?string $apiKey = null, ?int $universityId = null, ?string $authType = null): array
     {
         $uniId = Setting::resolveUniversityId($universityId);
         $targetFolderId = trim($folderId ?: Setting::get('gdrive_root_folder_id', '', $uniId));
+        $resolvedAuthType = $authType ?: (string) Setting::get('gdrive_auth_type', 'public', $uniId);
         $saJson = $serviceAccountJson !== null ? trim($serviceAccountJson) : trim(Setting::get('gdrive_service_account_json', '', $uniId));
         $key = $apiKey !== null ? trim($apiKey) : trim(Setting::get('gdrive_api_key', '', $uniId));
 
@@ -582,8 +587,15 @@ class GoogleDriveService
             ];
         }
 
-        // Case 1: Service Account JSON provided or configured
-        if (!empty($saJson)) {
+        // Case A: Private / Restricted Access Mode
+        if ($resolvedAuthType === 'private') {
+            if (empty($saJson)) {
+                return [
+                    'success' => false,
+                    'message' => 'Private Mode Selected: Please paste your Google Service Account JSON key below to authenticate.'
+                ];
+            }
+
             $clientEmail = static::getServiceAccountEmail($saJson);
             if (empty($clientEmail)) {
                 return [
@@ -601,7 +613,7 @@ class GoogleDriveService
                     $name = $res['data']['name'] ?? 'Root Folder';
                     return [
                         'success' => true,
-                        'message' => "Google Drive API v3 connected! Found folder: \"{$name}\" (Authenticated as: {$clientEmail}).",
+                        'message' => "Google Drive API v3 connected! Found private folder: \"{$name}\" (Authenticated as: {$clientEmail}).",
                         'auth_mode' => 'service_account',
                         'client_email' => $clientEmail,
                         'folder_name' => $name
@@ -641,27 +653,7 @@ class GoogleDriveService
             }
         }
 
-        // Case 2: API Key provided
-        if (!empty($key)) {
-            try {
-                $res = $this->fetchDriveApi("files/{$targetFolderId}", [
-                    'fields' => 'id, name, mimeType'
-                ], $uniId, null, $key);
-
-                if ($res['successful']) {
-                    $name = $res['data']['name'] ?? 'Root Folder';
-                    return [
-                        'success' => true,
-                        'message' => "Google Drive API connected via API Key! Found folder: \"{$name}\".",
-                        'auth_mode' => 'api_key'
-                    ];
-                }
-            } catch (\Throwable $e) {
-                // fall through to public check
-            }
-        }
-
-        // Case 3: Public Link / Scraper mode
+        // Case B: Public Access Mode (Zero Credentials)
         try {
             $response = Http::withHeaders($this->headers)->timeout(15)->get($this->baseUrl . $targetFolderId);
             $status = $response->status();
@@ -670,19 +662,18 @@ class GoogleDriveService
             if ($status === 404) {
                 return [
                     'success' => false,
-                    'message' => "Google Drive folder '{$targetFolderId}' was not found (HTTP 404). Please verify the Folder ID."
+                    'message' => "Google Drive folder '{$targetFolderId}' was not found (HTTP 404). Please verify the Folder ID or check link sharing."
                 ];
             }
 
-            // Check if restricted/redirected to login
-            if (str_contains($body, 'accounts.google.com/ServiceLogin') || str_contains($body, 'Sign in - Google Accounts') || !preg_match('/\\\\x5b\\\\x22[a-zA-Z0-9_\-]+\\\\x22/', $body)) {
+            if (str_contains($body, 'accounts.google.com/ServiceLogin') || str_contains($body, 'Sign in - Google Accounts') || !preg_match('/\\x5b\\x22[a-zA-Z0-9_\-]+\\x22/', $body)) {
                 preg_match('/<title>([^<]+)<\/title>/', $body, $titleMatch);
                 $title = $titleMatch ? trim(str_replace(['- Google Drive', '- Google ড্রাইভ'], '', $titleMatch[1])) : '';
 
                 if (!empty($title) && !str_contains($title, 'Sign in') && !str_contains($title, 'Error')) {
                     return [
                         'success' => true,
-                        'message' => "Connected successfully to public folder: \"{$title}\".",
+                        'message' => "Connected successfully to public folder: \"{$title}\" (Public access ready).",
                         'auth_mode' => 'public',
                         'folder_name' => $title
                     ];
@@ -690,7 +681,7 @@ class GoogleDriveService
 
                 return [
                     'success' => false,
-                    'message' => "This Google Drive folder is private or requires authentication. Please configure a Google Service Account JSON key below and share the folder with that email, or change folder sharing to 'Anyone with the link can view'.",
+                    'message' => "This Google Drive folder is private or requires Google login. Please change Google Drive Access Type to 'Private / Restricted Folder' above and provide a Service Account JSON key, or change folder sharing in Google Drive to 'Anyone with the link can view'.",
                     'auth_mode' => 'restricted_detected'
                 ];
             }

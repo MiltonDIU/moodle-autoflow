@@ -227,18 +227,42 @@
                     </div>
                 </div>
 
-                <!-- Google Drive Access / Credentials Options -->
-                <div class="border rounded-3 p-3 bg-light">
+                <!-- Google Drive Type Selector -->
+                <div class="mb-4">
+                    <label class="form-label fw-semibold small">Select Google Drive Folder Type <span class="text-danger">*</span></label>
+                    <select name="gdrive_auth_type" id="gdriveAuthTypeSelect" class="form-select form-select-lg fw-bold text-primary" style="border-color: #7dd3fc;">
+                        <option value="public" {{ ($settings['gdrive_auth_type'] ?? 'public') === 'public' ? 'selected' : '' }}>
+                            🌐 Public Folder (Anyone with the link can view - No credentials needed)
+                        </option>
+                        <option value="private" {{ ($settings['gdrive_auth_type'] ?? '') === 'private' ? 'selected' : '' }}>
+                            🔒 Private / Restricted Folder (Institutional / Requires Login - Service Account)
+                        </option>
+                    </select>
+                </div>
+
+                <!-- 1. Public Folder Mode (No credentials) -->
+                <div id="gdrivePublicInfoBox" class="border rounded-3 p-3 bg-light mb-3 {{ ($settings['gdrive_auth_type'] ?? 'public') === 'public' ? '' : 'd-none' }}">
+                    <div class="d-flex align-items-center">
+                        <i class="fa fa-globe text-primary fs-3 me-3"></i>
+                        <div>
+                            <div class="fw-bold text-dark">Public Folder Mode Active (Zero Credentials)</div>
+                            <small class="text-muted">Courses and files in Google Drive will be accessed publicly via direct sharing link (<em>"Anyone with the link can view"</em>). No extra login credentials or API keys are required.</small>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2. Private Folder Mode (Credentials needed) -->
+                <div id="gdrivePrivateCredentialsBox" class="border rounded-3 p-3 bg-light mb-3 {{ ($settings['gdrive_auth_type'] ?? '') === 'private' ? '' : 'd-none' }}">
                     <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
                         <h6 class="fw-bold text-dark mb-0">
-                            <i class="fa fa-shield-alt text-primary me-2"></i> Google Drive Authentication & Access Mode
+                            <i class="fa fa-shield-alt text-primary me-2"></i> Private Access Credentials (Google Service Account)
                         </h6>
                         <span class="badge bg-primary bg-opacity-10 text-primary border border-primary small">
-                            Institutional & Private Folders Support
+                            Institutional & Shared Drives
                         </span>
                     </div>
                     <p class="text-muted small mb-3">
-                        If your university course folder is private, requires login, or is stored in a Google Workspace Shared Drive, provide a <strong>Google Service Account JSON key</strong> below. For public folders (<em>"Anyone with the link can view"</em>), no credentials are required.
+                        Provide your <strong>Google Service Account JSON key</strong> below. Make sure your private Google Drive course root folder is shared with the Service Account email as <strong>Viewer</strong>.
                     </p>
 
                     @php
@@ -262,21 +286,21 @@
                         <div class="col-md-12">
                             <div class="d-flex justify-content-between align-items-center mb-1">
                                 <label class="form-label small fw-semibold mb-0">
-                                    Google Service Account JSON Key <span class="badge bg-secondary ms-1">Recommended for Private Folders</span>
+                                    Google Service Account JSON Key <span class="text-danger">*</span>
                                 </label>
                                 <small class="text-muted">Download JSON key from Google Cloud Console &rarr; Service Accounts</small>
                             </div>
                             <textarea name="gdrive_service_account_json" id="gdriveServiceAccountJson" class="form-control font-monospace" rows="5" placeholder='{"type": "service_account", "project_id": "...", "private_key_id": "...", "private_key": "-----BEGIN RSA PRIVATE KEY-----\n...", "client_email": "...", ...}' style="font-size: 0.8rem; background: #fff;">{{ $settings['gdrive_service_account_json'] ?? '' }}</textarea>
                             <div class="form-text small text-muted">
-                                <i class="fa fa-info-circle text-info me-1"></i> <strong>How to connect Private / Institutional Folders:</strong>
-                                1. In Google Cloud Console, create a free Service Account and download its JSON key.<br>
-                                2. Open Google Drive, right-click your course root folder &rarr; <strong>Share</strong> &rarr; add the Service Account's <code>client_email</code> with <strong>Viewer</strong> access.<br>
-                                3. Paste the JSON key here and click <strong>"Test Drive Connection"</strong> above.
+                                <i class="fa fa-info-circle text-info me-1"></i> <strong>How to set up:</strong>
+                                1. In Google Cloud Console, create a Service Account &rarr; Keys &rarr; Create new JSON key.<br>
+                                2. Open Google Drive, right-click your course root folder &rarr; <strong>Share</strong> &rarr; add the Service Account's <code>client_email</code> as <strong>Viewer</strong>.<br>
+                                3. Paste the downloaded JSON here and click <strong>"Test Drive Connection"</strong> above.
                             </div>
                         </div>
 
                         <div class="col-md-12 mt-2">
-                            <label class="form-label small fw-semibold">Google Drive API Key (Optional / Public API quota boost)</label>
+                            <label class="form-label small fw-semibold">Google Drive API Key (Optional / Additional Quota)</label>
                             <input type="password" name="gdrive_api_key" id="gdriveApiKey" class="form-control form-control-sm font-monospace" value="{{ $settings['gdrive_api_key'] ?? '' }}" placeholder="AIzaSy...">
                         </div>
                     </div>
@@ -561,6 +585,22 @@
         }
     }
     window.removeCustomDocRow = removeCustomDocRow;
+    // Google Drive Auth Type Switcher
+    const gdriveAuthSelect = document.getElementById('gdriveAuthTypeSelect');
+    if (gdriveAuthSelect) {
+        gdriveAuthSelect.addEventListener('change', function() {
+            const privBox = document.getElementById('gdrivePrivateCredentialsBox');
+            const pubBox = document.getElementById('gdrivePublicInfoBox');
+            if (this.value === 'private') {
+                if (privBox) privBox.classList.remove('d-none');
+                if (pubBox) pubBox.classList.add('d-none');
+            } else {
+                if (privBox) privBox.classList.add('d-none');
+                if (pubBox) pubBox.classList.remove('d-none');
+            }
+        });
+    }
+
     // AI Provider Switcher
     const aiSelect = document.getElementById('aiProviderSelect');
     if (aiSelect) {
@@ -595,6 +635,7 @@
         if (!btn || !alertBox) return;
 
         const originalText = btn.innerHTML;
+        const authType = (document.getElementById('gdriveAuthTypeSelect') || {}).value || 'public';
         const folderId = (document.getElementById('gdriveRootFolderId') || {}).value || '';
         const saJson = (document.getElementById('gdriveServiceAccountJson') || {}).value || '';
         const apiKey = (document.getElementById('gdriveApiKey') || {}).value || '';
@@ -615,6 +656,7 @@
             },
             body: JSON.stringify({
                 target: 'gdrive',
+                auth_type: authType,
                 folder_id: folderId,
                 service_account_json: saJson,
                 api_key: apiKey
