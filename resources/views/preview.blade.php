@@ -1,92 +1,82 @@
-@use('App\Models\Setting')
-@extends('layouts.app', ['title' => 'Curriculum Preview: ' . $course->name])
+@extends('layouts.app')
 
 @section('content')
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
-        <span class="badge bg-primary text-uppercase">{{ $course->course_code ?? 'Course' }}</span>
-        <h3 class="fw-bold brand-font mb-1 mt-1">{{ $course->name }}</h3>
-        <p class="text-muted small mb-0">Google Drive: <a href="https://drive.google.com/drive/folders/{{ $course->gdrive_folder_id }}" target="_blank">{{ $course->gdrive_folder_id }}</a> &bull; Storage: <strong class="text-uppercase">{{ $course->storage_driver }}</strong></p>
-    </div>
-    <div class="d-flex gap-2">
+        <h3 class="fw-bold mb-1"><i class="fa fa-book text-primary me-2"></i> Course Preview: {{ $course->name }}</h3>
+        <span class="badge bg-secondary">{{ $course->course_code }}</span>
         @if($course->moodle_course_id)
-            <a href="{{ Setting::get('moodle_url', 'http://elearn.local') }}/course/view.php?id={{ $course->moodle_course_id }}" target="_blank" class="btn btn-success">
-                <i class="fa fa-external-link me-1"></i> Open in Moodle
+            <a href="http://elearn.local/course/view.php?id={{ $course->moodle_course_id }}" target="_blank" class="badge bg-success text-decoration-none">
+                <i class="fa fa-external-link me-1"></i> Open in Moodle (ID: {{ $course->moodle_course_id }})
             </a>
         @endif
-        <a href="{{ route('dashboard') }}" class="btn btn-outline-secondary">
-            <i class="fa fa-arrow-left me-1"></i> Dashboard
-        </a>
     </div>
+    <a href="{{ route('dashboard') }}" class="btn btn-outline-secondary">
+        <i class="fa fa-arrow-left me-1"></i> Back to Dashboard
+    </a>
 </div>
 
 @if(empty($course->extracted_data))
-    <div class="custom-card p-5 text-center text-muted">
-        <i class="fa fa-cogs fs-1 mb-3 text-secondary opacity-50"></i>
-        <h5>Curriculum not extracted yet</h5>
-        <p class="small mb-3">Click "Sync Moodle" on the dashboard to trigger AI extraction and video mapping.</p>
-        <form action="{{ route('courses.process', $course->id) }}" method="POST">
-            @csrf
-            <button type="submit" class="btn btn-primary-custom">
-                <i class="fa fa-play me-1"></i> Start Processing Course
-            </button>
-        </form>
+    <div class="alert alert-info">
+        <i class="fa fa-info-circle me-1"></i> No curriculum has been extracted for this course yet. Click "Process & Sync to Moodle" on the dashboard.
     </div>
 @else
-    <div class="accordion" id="curriculumAccordion">
+    <div class="accordion" id="weeksAccordion">
         @foreach($course->extracted_data as $wnum => $w)
-        <div class="accordion-item mb-3 custom-card border-0 overflow-hidden">
+        <div class="accordion-item mb-3 border rounded shadow-sm overflow-hidden">
             <h2 class="accordion-header" id="heading{{ $wnum }}">
-                <button class="accordion-button {{ $loop->first ? '' : 'collapsed' }} fw-bold brand-font py-3" type="button" data-bs-toggle="collapse" data-bs-target="#collapse{{ $wnum }}">
-                    <span class="badge bg-indigo text-white me-2 px-2 py-1" style="background: #4f46e5;">Week {{ sprintf('%02d', $wnum) }}</span>
-                    <span>{{ $w['title'] ?? 'Week ' . $wnum }}</span>
-                    @if(isset($course->video_map[$wnum]) && count($course->video_map[$wnum]) > 0)
-                        <span class="badge bg-light text-primary border ms-auto me-3">
-                            <i class="fa fa-video me-1"></i> {{ count($course->video_map[$wnum]) }} Video(s)
-                        </span>
-                    @endif
+                <button class="accordion-button {{ $loop->first ? '' : 'collapsed' }} fw-bold" type="button" data-bs-toggle="collapse" data-bs-target="#collapse{{ $wnum }}" aria-expanded="{{ $loop->first ? 'true' : 'false' }}">
+                    <span class="badge bg-primary me-2">Week {{ sprintf('%02d', $wnum) }}</span>
+                    {{ $w['title'] ?? "Week {$wnum}" }}
                 </button>
             </h2>
-            <div id="collapse{{ $wnum }}" class="accordion-collapse collapse {{ $loop->first ? 'show' : '' }}" data-bs-parent="#curriculumAccordion">
-                <div class="accordion-body p-4 bg-light bg-opacity-25">
+            <div id="collapse{{ $wnum }}" class="accordion-collapse collapse {{ $loop->first ? 'show' : '' }}" data-bs-parent="#weeksAccordion">
+                <div class="accordion-body bg-light">
                     
                     <!-- Overview -->
-                    <div class="mb-3 p-3 bg-white border rounded-3">
-                        <h6 class="fw-bold text-primary mb-2"><i class="fa fa-info-circle me-1"></i> Overview</h6>
-                        <p class="mb-2 text-dark">{{ $w['overview'] ?? '' }}</p>
+                    <div class="card p-3 mb-3 border-start border-primary border-4 bg-white">
+                        <h6 class="fw-bold text-primary mb-2"><i class="fa fa-info-circle me-1"></i> Module Overview</h6>
+                        <p class="text-muted mb-0" style="line-height: 1.6;">{!! nl2br(e($w['overview'] ?? 'No overview available.')) !!}</p>
+                    </div>
+
+                    <!-- Learning Objectives & Key Terms -->
+                    <div class="row g-3 mb-3">
                         @if(!empty($w['objectives']))
-                            <strong class="small text-muted text-uppercase">Learning Objectives:</strong>
-                            <ul class="small text-muted mb-0 mt-1">
-                                @foreach($w['objectives'] as $obj)
-                                    <li>{{ $obj }}</li>
-                                @endforeach
-                            </ul>
+                        <div class="col-md-6">
+                            <div class="p-3 bg-white border rounded-3 h-100">
+                                <h6 class="fw-bold text-success mb-2"><i class="fa fa-bullseye me-1"></i> Student Learning Objectives</h6>
+                                <ul class="small text-muted mb-0 ps-3">
+                                    @foreach($w['objectives'] as $obj)
+                                        <li class="mb-1">{{ $obj }}</li>
+                                    @endforeach
+                                </ul>
+                            </div>
+                        </div>
+                        @endif
+
+                        @if(!empty($w['key_terms']))
+                        <div class="col-md-6">
+                            <div class="p-3 bg-white border rounded-3 h-100">
+                                <h6 class="fw-bold text-info mb-2"><i class="fa fa-key me-1"></i> Key Terms & Definitions</h6>
+                                <ul class="small text-muted mb-0 ps-3">
+                                    @foreach($w['key_terms'] as $term)
+                                        <li class="mb-1">{{ $term }}</li>
+                                    @endforeach
+                                </ul>
+                            </div>
+                        </div>
                         @endif
                     </div>
 
-                    <!-- Readings -->
-                    @if(!empty($w['key_terms']))
-                    <div class="mb-3 p-3 bg-white border rounded-3">
-                        <h6 class="fw-bold text-success mb-2"><i class="fa fa-book me-1"></i> Key Terms & Readings</h6>
-                        <ul class="small text-muted mb-0">
-                            @foreach($w['key_terms'] as $term)
-                                <li>{{ $term }}</li>
-                            @endforeach
-                        </ul>
-                    </div>
-                    @endif
-
                     <!-- Videos -->
-                    @if(isset($course->video_map[$wnum]) && !empty($course->video_map[$wnum]))
-                    <div class="mb-3 p-3 bg-white border rounded-3">
-                        <h6 class="fw-bold text-indigo mb-2" style="color: #4f46e5;"><i class="fa fa-play-circle me-1"></i> Video Lectures ({{ count($course->video_map[$wnum]) }})</h6>
+                    @if(isset($course->video_map[$wnum]) && count($course->video_map[$wnum]) > 0)
+                    <div class="card p-3 mb-3 border-start border-indigo border-4 bg-white">
+                        <h6 class="fw-bold text-primary mb-2"><i class="fa fa-video-camera me-1"></i> Lecture & Video Lessons ({{ count($course->video_map[$wnum]) }})</h6>
                         <div class="row g-2">
                             @foreach($course->video_map[$wnum] as $v)
                             <div class="col-md-6">
-                                <div class="border rounded p-2 d-flex justify-content-between align-items-center bg-light">
-                                    <div class="text-truncate me-2 small fw-semibold">
-                                        <i class="fa fa-film text-secondary me-1"></i> {{ $v['filename'] }}
-                                    </div>
+                                <div class="p-2 border rounded d-flex align-items-center justify-content-between">
+                                    <span class="small text-truncate me-2"><i class="fa fa-play-circle text-danger me-1"></i> {{ $v['filename'] }}</span>
                                     <a href="{{ $v['direct_url'] ?? '#' }}" target="_blank" class="btn btn-sm btn-outline-primary text-nowrap">
                                         Preview <i class="fa fa-external-link"></i>
                                     </a>
@@ -102,8 +92,8 @@
                         @if(!empty($w['discussion']))
                         <div class="col-md-6">
                             <div class="p-3 bg-white border rounded-3 h-100">
-                                <h6 class="fw-bold text-warning mb-2"><i class="fa fa-comments me-1"></i> Discussion Prompt</h6>
-                                <p class="small text-muted mb-0">{{ $w['discussion'] }}</p>
+                                <h6 class="fw-bold text-warning mb-2"><i class="fa fa-comments me-1"></i> Discussion Prompt (Real Forum Activity)</h6>
+                                <p class="small text-muted mb-0" style="line-height: 1.5;">{{ is_array($w['discussion']) ? ($w['discussion']['prompt'] ?? '') : $w['discussion'] }}</p>
                             </div>
                         </div>
                         @endif
@@ -111,8 +101,11 @@
                         @if(!empty($w['assignment']))
                         <div class="col-md-6">
                             <div class="p-3 bg-white border rounded-3 h-100">
-                                <h6 class="fw-bold text-purple mb-2" style="color: #8b5cf6;"><i class="fa fa-tasks me-1"></i> Assignment Task</h6>
-                                <p class="small text-muted mb-0">{{ $w['assignment'] }}</p>
+                                <h6 class="fw-bold text-purple mb-2" style="color: #8b5cf6;"><i class="fa fa-tasks me-1"></i> Weekly Assignment (PDF/Word & Online Text Submission)</h6>
+                                <p class="small text-muted mb-1" style="line-height: 1.5;">{{ is_array($w['assignment']) ? ($w['assignment']['task'] ?? '') : $w['assignment'] }}</p>
+                                @if(is_array($w['assignment']) && !empty($w['assignment']['blooms_level']))
+                                    <span class="badge bg-light text-success border mt-2">Bloom's: {{ $w['assignment']['blooms_level'] }}</span>
+                                @endif
                             </div>
                         </div>
                         @endif
@@ -126,10 +119,13 @@
                             <div class="mb-2 p-2 border-bottom">
                                 <p class="small fw-bold mb-1">{{ $q['question'] }}</p>
                                 <div class="small text-muted ms-2">
-                                    @foreach($q['options'] as $opt)
-                                        <div>{{ $opt }}</div>
+                                    @foreach($q['options'] as $optKey => $optVal)
+                                        <div>{{ is_numeric($optKey) ? $optVal : ($optKey . ') ' . $optVal) }}</div>
                                     @endforeach
                                     <div class="mt-1 text-success fw-semibold">✔ Answer: {{ $q['answer'] }}</div>
+                                    @if(!empty($q['explanation']))
+                                        <div class="small text-secondary mt-1"><em>Note: {{ $q['explanation'] }}</em></div>
+                                    @endif
                                 </div>
                             </div>
                         @endforeach

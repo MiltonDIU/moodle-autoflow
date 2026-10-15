@@ -2,6 +2,9 @@
 define('CLI_SCRIPT', true);
 require('/home/milton/Projects/elearn/config.php');
 require_once($CFG->dirroot . '/course/lib.php');
+require_once($CFG->dirroot . '/mod/assign/lib.php');
+require_once($CFG->dirroot . '/mod/assign/locallib.php');
+require_once($CFG->dirroot . '/mod/forum/lib.php');
 require_once($CFG->dirroot . '/mod/quiz/lib.php');
 require_once($CFG->dirroot . '/mod/quiz/locallib.php');
 require_once($CFG->dirroot . '/mod/url/lib.php');
@@ -122,7 +125,7 @@ $courseid = (int) $course->id;
 echo "FINAL_MOODLE_COURSE_ID:{$courseid}\n";
 
 // ---------------------------------------------------------
-// HELPER FUNCTIONS FOR IDEMPOTENT MODULE CREATION / UPDATE
+// HELPER FUNCTIONS FOR REAL MOODLE ACTIVITIES
 // ---------------------------------------------------------
 
 function get_or_create_url($courseid, $sectionnum, $urlName, $externalUrl, $intro = '') {
@@ -188,14 +191,6 @@ function sync_label_activity($courseid, $sectionnum, $searchKeyword, $labelName,
                     $DB->update_record('label', $l);
                     return $cmid;
                 }
-            } elseif ($cm->modname === 'page' && str_contains($cm->name, $searchKeyword)) {
-                $p = $DB->get_record('page', ['id' => $cm->instance]);
-                if ($p) {
-                    $p->content = $htmlContent;
-                    $p->timemodified = time();
-                    $DB->update_record('page', $p);
-                    return $cmid;
-                }
             }
         }
     }
@@ -228,6 +223,201 @@ function sync_label_activity($courseid, $sectionnum, $searchKeyword, $labelName,
     return $cmid;
 }
 
+/**
+ * Remove obsolete static label placeholder if real activity is present
+ */
+function remove_obsolete_label($courseid, $sectionnum, $labelSearch) {
+    global $DB;
+    $modinfo = get_fast_modinfo($courseid);
+    if (isset($modinfo->sections[$sectionnum])) {
+        foreach ($modinfo->sections[$sectionnum] as $cmid) {
+            $cm = $modinfo->cms[$cmid];
+            if ($cm->modname === 'label' && (str_contains($cm->name, $labelSearch) || str_contains($cm->text ?? '', $labelSearch))) {
+                course_delete_module($cmid);
+            }
+        }
+    }
+}
+
+/**
+ * Synchronize Real Moodle Assignment (mod_assign)
+ * Students can submit files (PDF, Word) or online text
+ * Teachers can grade and provide feedback
+ */
+function sync_assignment_activity($courseid, $sectionnum, $assignTitle, $assignmentData) {
+    global $DB;
+    $assignmodule = $DB->get_record('modules', ['name' => 'assign']);
+    $modinfo = get_fast_modinfo($courseid);
+
+    $taskText = is_array($assignmentData) ? ($assignmentData['task'] ?? '') : $assignmentData;
+    $blooms = is_array($assignmentData) ? ($assignmentData['blooms_level'] ?? 'Analyze, Apply, Evaluate') : 'Analyze, Apply, Evaluate';
+    $rubric = is_array($assignmentData) ? ($assignmentData['rubric_raw'] ?? '') : '';
+
+    $introHtml = '<div style="font-family: inherit; line-height: 1.6; color: #1e293b;">';
+    $introHtml .= '<div style="background: #f0fdf4; border-left: 4px solid #16a34a; padding: 16px 20px; border-radius: 8px; margin-bottom: 16px;">';
+    $introHtml .= '<h4 style="color: #166534; margin: 0 0 10px 0; font-weight: 700;"><i class="fa fa-file-text-o mr-2"></i> Assignment Instructions & Task Guidelines</h4>';
+    $introHtml .= '<p style="margin: 0; font-size: 1rem; color: #1e293b; line-height: 1.6;">' . nl2br(htmlspecialchars($taskText)) . '</p>';
+    $introHtml .= '<div style="margin-top: 12px; font-size: 0.88rem; color: #15803d;"><strong>Bloom’s Taxonomy Level:</strong> ' . htmlspecialchars($blooms) . '</div>';
+    $introHtml .= '</div>';
+
+    if (!empty($rubric)) {
+        $introHtml .= '<div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 14px 18px; border-radius: 8px; margin-bottom: 16px;">';
+        $introHtml .= '<h5 style="color: #334155; margin: 0 0 8px 0; font-weight: 700;"><i class="fa fa-table mr-2"></i> Evaluation Criteria & Grading Rubric</h5>';
+        $introHtml .= '<pre style="white-space: pre-wrap; font-family: inherit; font-size: 0.88rem; color: #475569; background: #ffffff; padding: 12px; border-radius: 6px; border: 1px solid #cbd5e1; margin: 0;">' . htmlspecialchars($rubric) . '</pre>';
+        $introHtml .= '</div>';
+    }
+
+    $introHtml .= '<div style="background: #eff6ff; border-left: 4px solid #3b82f6; padding: 12px 16px; border-radius: 8px;">';
+    $introHtml .= '<p style="margin: 0; font-size: 0.9rem; color: #1e40af;"><strong>Submission Options:</strong> Students can submit their assignment as a <strong>PDF or Word document (.pdf, .doc, .docx)</strong> or type their answer directly in the online text box. Teachers can grade and provide feedback comments in the gradebook.</p>';
+    $introHtml .= '</div>';
+    $introHtml .= '</div>';
+
+    // 1. Check existing assignment in section
+    if (isset($modinfo->sections[$sectionnum])) {
+        foreach ($modinfo->sections[$sectionnum] as $cmid) {
+            $cm = $modinfo->cms[$cmid];
+            if ($cm->modname === 'assign') {
+                $assignRecord = $DB->get_record('assign', ['id' => $cm->instance]);
+                if ($assignRecord) {
+                    $assignRecord->name = $assignTitle;
+                    $assignRecord->intro = $introHtml;
+                    $assignRecord->timemodified = time();
+                    $DB->update_record('assign', $assignRecord);
+                    return $cmid;
+                }
+            }
+        }
+    }
+
+    // 2. Create new assignment course module
+    $cm = new stdClass();
+    $cm->course = $courseid;
+    $cm->module = $assignmodule->id;
+    $cm->instance = 0;
+    $cm->section = 0;
+    $cm->idnumber = '';
+    $cm->added = time();
+    $cm->visible = 1;
+    $cm->visibleoncoursepage = 1;
+    $cm->visibleold = 1;
+    $cm->groupmode = 0;
+    $cm->groupingid = 0;
+    $cm->completion = 0;
+    $cmid = $DB->insert_record('course_modules', $cm);
+
+    $assignData = new stdClass();
+    $assignData->course = $courseid;
+    $assignData->coursemodule = $cmid;
+    $assignData->name = $assignTitle;
+    $assignData->intro = $introHtml;
+    $assignData->introformat = FORMAT_HTML;
+    $assignData->alwaysshowdescription = 1;
+    $assignData->submissiondrafts = 0;
+    $assignData->requiresubmissionstatement = 0;
+    $assignData->sendnotifications = 0;
+    $assignData->sendlatenotifications = 0;
+    $assignData->sendstudentnotifications = 1;
+    $assignData->duedate = 0;
+    $assignData->cutoffdate = 0;
+    $assignData->gradingduedate = 0;
+    $assignData->allowsubmissionsfromdate = time();
+    $assignData->grade = 100;
+    $assignData->teamsubmission = 0;
+    $assignData->requireallteammemberssubmit = 0;
+    $assignData->blindmarking = 0;
+    $assignData->markingworkflow = 0;
+    $assignData->markingallocation = 0;
+
+    // Submission plugins: Online text + PDF / Word file submission
+    $assignData->assignsubmission_onlinetext_enabled = 1;
+    $assignData->assignsubmission_file_enabled = 1;
+    $assignData->assignsubmission_file_maxfiles = 2;
+    $assignData->assignsubmission_file_maxsizebytes = 0;
+    $assignData->assignsubmission_file_filetypes = '.pdf,.doc,.docx';
+
+    // Feedback plugins: Comments + EditPDF annotation
+    $assignData->assignfeedback_comments_enabled = 1;
+    $assignData->assignfeedback_editpdf_enabled = 1;
+
+    $assignId = assign_add_instance($assignData);
+    $DB->set_field('course_modules', 'instance', $assignId, ['id' => $cmid]);
+    course_add_cm_to_section($courseid, $cmid, $sectionnum);
+
+    return $cmid;
+}
+
+/**
+ * Synchronize Real Moodle Discussion Forum (mod_forum)
+ * Students and instructors can participate and reply
+ */
+function sync_forum_activity($courseid, $sectionnum, $forumTitle, $discussionData) {
+    global $DB;
+    $forummodule = $DB->get_record('modules', ['name' => 'forum']);
+    $modinfo = get_fast_modinfo($courseid);
+
+    $promptText = is_array($discussionData) ? ($discussionData['prompt'] ?? '') : $discussionData;
+
+    $introHtml = '<div style="font-family: inherit; line-height: 1.6; color: #1e293b;">';
+    $introHtml .= '<div style="background: #fffdf5; border-left: 4px solid #f59e0b; padding: 16px 20px; border-radius: 8px; margin-bottom: 14px;">';
+    $introHtml .= '<h4 style="color: #92400e; margin: 0 0 10px 0; font-weight: 700;"><i class="fa fa-comments mr-2"></i> Weekly Discussion Topic & Discussion Prompt</h4>';
+    $introHtml .= '<p style="margin: 0; font-size: 1rem; color: #78350f; line-height: 1.6;">' . nl2br(htmlspecialchars($promptText)) . '</p>';
+    $introHtml .= '</div>';
+    $introHtml .= '<p style="color: #64748b; font-size: 0.9rem; margin: 0;"><i class="fa fa-info-circle mr-1"></i> Post your response and engage in academic debate with your fellow classmates below.</p>';
+    $introHtml .= '</div>';
+
+    // 1. Check existing forum in section
+    if (isset($modinfo->sections[$sectionnum])) {
+        foreach ($modinfo->sections[$sectionnum] as $cmid) {
+            $cm = $modinfo->cms[$cmid];
+            if ($cm->modname === 'forum') {
+                $forumRecord = $DB->get_record('forum', ['id' => $cm->instance]);
+                if ($forumRecord) {
+                    $forumRecord->name = $forumTitle;
+                    $forumRecord->intro = $introHtml;
+                    $forumRecord->timemodified = time();
+                    $DB->update_record('forum', $forumRecord);
+                    return $cmid;
+                }
+            }
+        }
+    }
+
+    // 2. Create new forum course module
+    $fcm = new stdClass();
+    $fcm->course = $courseid;
+    $fcm->module = $forummodule->id;
+    $fcm->instance = 0;
+    $fcm->section = 0;
+    $fcm->idnumber = '';
+    $fcm->added = time();
+    $fcm->visible = 1;
+    $fcm->visibleoncoursepage = 1;
+    $fcm->visibleold = 1;
+    $fcm->groupmode = 0;
+    $fcm->groupingid = 0;
+    $fcm->completion = 0;
+    $fcmid = $DB->insert_record('course_modules', $fcm);
+
+    $forumData = new stdClass();
+    $forumData->course = $courseid;
+    $forumData->coursemodule = $fcmid;
+    $forumData->name = $forumTitle;
+    $forumData->intro = $introHtml;
+    $forumData->introformat = FORMAT_HTML;
+    $forumData->type = 'single'; // single simple discussion allows direct inline replies
+    $forumData->assessed = 0;
+    $forumData->maxbytes = 0;
+    $forumData->maxattachments = 1;
+    $forumData->forcesubscribe = 0;
+    $forumData->trackingtype = 1;
+
+    $forumId = forum_add_instance($forumData);
+    $DB->set_field('course_modules', 'instance', $forumId, ['id' => $fcmid]);
+    course_add_cm_to_section($courseid, $fcmid, $sectionnum);
+
+    return $fcmid;
+}
+
 // ---------------------------------------------------------
 // 2. SYNCHRONIZE GENERAL DOCS (SECTION 0)
 // ---------------------------------------------------------
@@ -243,7 +433,7 @@ foreach ($generalDocs as $doc) {
 echo "✔ Section 0 Course Materials & Documents synchronized.\n";
 
 // ---------------------------------------------------------
-// 3. SYNCHRONIZE SECTIONS 1 TO 16 (CURRICULUM, VIDEOS, QUIZZES)
+// 3. SYNCHRONIZE SECTIONS 1 TO 16 (CURRICULUM, VIDEOS, ACTIVITIES, QUIZZES)
 // ---------------------------------------------------------
 $quizmodule = $DB->get_record('modules', ['name' => 'quiz']);
 
@@ -271,30 +461,30 @@ for ($wnum = 1; $wnum <= 16; $wnum++) {
         $DB->update_record('course_sections', $sec_rec);
     }
 
-    // A. Overview (Instructor Overview + Student Learning Objectives)
+    // A. 100% Verbatim Overview Card (Handbook Overview + Student Learning Objectives)
     $overviewHtml = '<div class="card p-3 my-2" style="border-left: 4px solid #3b82f6; border-radius: 8px; background: #f8fafc;">';
     $overviewHtml .= '<h5 style="color: #1e3a8a; font-weight: 700; margin-bottom: 12px;">Week ' . sprintf('%02d', $wnum) . ' Overview: ' . htmlspecialchars($title) . '</h5>';
-    $overviewHtml .= '<p style="color: #334155; line-height: 1.6; margin-bottom: 14px;">' . htmlspecialchars($w['overview'] ?? '') . '</p>';
+    $overviewHtml .= '<p style="color: #334155; line-height: 1.6; margin-bottom: 14px;">' . nl2br(htmlspecialchars($w['overview'] ?? '')) . '</p>';
     if (!empty($w['objectives'])) {
-        $overviewHtml .= '<h6 style="color: #1e40af; font-weight: 600; text-transform: uppercase; font-size: 0.82rem; letter-spacing: 0.5px;">Student Learning Objectives:</h6>';
+        $overviewHtml .= '<h6 style="color: #1e40af; font-weight: 600; text-transform: uppercase; font-size: 0.82rem; letter-spacing: 0.5px; margin-bottom: 8px;">Student Learning Objectives:</h6>';
         $overviewHtml .= '<ul style="color: #475569; padding-left: 20px; margin-bottom: 0;">';
         foreach ($w['objectives'] as $obj) {
-            $overviewHtml .= '<li style="margin-bottom: 4px;">' . htmlspecialchars($obj) . '</li>';
+            $overviewHtml .= '<li style="margin-bottom: 6px; line-height: 1.5;">' . htmlspecialchars($obj) . '</li>';
         }
         $overviewHtml .= '</ul>';
     }
     $overviewHtml .= '</div>';
     sync_label_activity($courseid, $wnum, 'Overview', 'Overview', $overviewHtml);
 
-    // B. Required Readings & Key Terms
+    // B. 100% Verbatim Required Readings & Key Terms Card
     $readingsHtml = '<div class="card p-3 my-2" style="border-left: 4px solid #10b981; border-radius: 8px; background: #f0fdf4;">';
     $readingsHtml .= '<h5 style="color: #065f46; font-weight: 700; margin-bottom: 10px;"><i class="fa fa-book mr-1"></i> Required Readings & Core Concepts</h5>';
     $readingsHtml .= '<p style="margin-bottom: 10px;"><strong>Student Handbook:</strong> Chapter ' . $wnum . ' — <em>' . htmlspecialchars($title) . '</em></p>';
     if (!empty($w['key_terms'])) {
-        $readingsHtml .= '<h6 style="color: #047857; font-weight: 600; font-size: 0.85rem;">Key Terms & Definitions:</h6>';
+        $readingsHtml .= '<h6 style="color: #047857; font-weight: 600; font-size: 0.85rem; margin-bottom: 8px;">Key Terms & Definitions:</h6>';
         $readingsHtml .= '<ul style="color: #374151; padding-left: 20px; margin-bottom: 0;">';
         foreach ($w['key_terms'] as $t) {
-            $readingsHtml .= '<li style="margin-bottom: 4px;">' . htmlspecialchars($t) . '</li>';
+            $readingsHtml .= '<li style="margin-bottom: 6px; line-height: 1.5;">' . htmlspecialchars($t) . '</li>';
         }
         $readingsHtml .= '</ul>';
     }
@@ -322,7 +512,6 @@ for ($wnum = 1; $wnum <= 16; $wnum++) {
             foreach ($videos as $idx => $v) {
                 $partNum = $idx + 1;
                 $cleanFilename = htmlspecialchars($v['filename']);
-                // Part 1 is open by default; subsequent parts are collapsed until clicked
                 $isOpen = ($idx === 0) ? 'open' : '';
                 $bgHeader = ($idx === 0) ? '#eef2ff' : '#f8fafc';
                 $badgeBg = ($idx === 0) ? '#4f46e5' : '#64748b';
@@ -351,22 +540,22 @@ for ($wnum = 1; $wnum <= 16; $wnum++) {
     $videoHtml .= '</div>';
     sync_label_activity($courseid, $wnum, 'Lecture & Video Lessons', 'Lecture / Lesson', $videoHtml);
 
-    // D. Discussion Forum
+    // Remove any old placeholder labels for Discussion and Assignment
+    remove_obsolete_label($courseid, $wnum, 'Weekly Discussion');
+    remove_obsolete_label($courseid, $wnum, 'Weekly Assignment');
+
+    // D. REAL MOODLE DISCUSSION FORUM (mod_forum)
     if (!empty($w['discussion'])) {
-        $discHtml = '<div class="card p-3 my-2" style="border-left: 4px solid #f59e0b; border-radius: 8px; background: #fffdf5;">';
-        $discHtml .= '<h5 style="color: #92400e; font-weight: 700; margin-bottom: 8px;"><i class="fa fa-comments mr-1"></i> Weekly Discussion</h5>';
-        $discHtml .= '<div style="background: #fef3c7; padding: 12px; border-radius: 6px;"><p style="margin: 0; color: #78350f;">' . htmlspecialchars($w['discussion']) . '</p></div>';
-        $discHtml .= '</div>';
-        sync_label_activity($courseid, $wnum, 'Weekly Discussion', 'Discussion', $discHtml);
+        $forumTitle = sprintf("Week %02d Discussion Forum: %s", $wnum, $title);
+        $forumCmid = sync_forum_activity($courseid, $wnum, $forumTitle, $w['discussion']);
+        echo "  ✔ Week {$wnum} Discussion Forum synced (CMID: {$forumCmid})\n";
     }
 
-    // E. Assignment
+    // E. REAL MOODLE ASSIGNMENT (mod_assign)
     if (!empty($w['assignment'])) {
-        $assignHtml = '<div class="card p-3 my-2" style="border-left: 4px solid #8b5cf6; border-radius: 8px; background: #faf5ff;">';
-        $assignHtml .= '<h5 style="color: #5b21b6; font-weight: 700; margin-bottom: 8px;"><i class="fa fa-tasks mr-1"></i> Weekly Assignment</h5>';
-        $assignHtml .= '<div style="background: #ede9fe; padding: 12px; border-radius: 6px;"><p style="margin: 0; color: #4c1d95;">' . htmlspecialchars($w['assignment']) . '</p></div>';
-        $assignHtml .= '</div>';
-        sync_label_activity($courseid, $wnum, 'Weekly Assignment', 'Learning Activity / Assignment', $assignHtml);
+        $assignTitle = sprintf("Week %02d Assignment: %s", $wnum, $title);
+        $assignCmid = sync_assignment_activity($courseid, $wnum, $assignTitle, $w['assignment']);
+        echo "  ✔ Week {$wnum} Assignment Activity synced (CMID: {$assignCmid})\n";
     }
 
     // F. NATIVE MOODLE QUIZ FOR THIS WEEK
@@ -508,17 +697,17 @@ for ($wnum = 1; $wnum <= 16; $wnum++) {
                 $q = new stdClass();
                 $q->category = $catid;
                 $q->parent = 0;
-                $q->name = sprintf("W%02d Q%02d: %s", $wnum, ($qIdx + 1), mb_substr($mcq['question'], 0, 45, 'UTF-8'));
+                $q->name = sprintf("W%02d_Q%02d: %s", $wnum, $qIdx + 1, substr($mcq['question'], 0, 45));
                 $q->questiontext = '<p>' . htmlspecialchars($mcq['question']) . '</p>';
                 $q->questiontextformat = FORMAT_HTML;
-                $q->generalfeedback = '<p>' . htmlspecialchars($mcq['explanation'] ?? '') . '</p>';
+                $q->generalfeedback = !empty($mcq['explanation']) ? '<p>' . htmlspecialchars($mcq['explanation']) . '</p>' : '';
                 $q->generalfeedbackformat = FORMAT_HTML;
                 $q->defaultmark = 1.0;
                 $q->penalty = 0.3333333;
                 $q->qtype = 'multichoice';
                 $q->length = 1;
                 $q->stamp = make_unique_id_code();
-                $q->version = 1;
+                $q->version = make_unique_id_code();
                 $q->hidden = 0;
                 $q->timecreated = time();
                 $q->timemodified = time();
@@ -526,7 +715,7 @@ for ($wnum = 1; $wnum <= 16; $wnum++) {
                 $q->modifiedby = 2;
                 $qid = $DB->insert_record('question', $q);
 
-                // Version
+                // Question Version
                 $qv = new stdClass();
                 $qv->questionbankentryid = $entryid;
                 $qv->version = 1;
@@ -535,26 +724,14 @@ for ($wnum = 1; $wnum <= 16; $wnum++) {
                 $DB->insert_record('question_versions', $qv);
 
                 // Answers
-                $rawAns = trim($mcq['answer']);
-                $correctLetter = '';
-                if (preg_match('/^([A-D])\b/i', $rawAns, $am)) {
-                    $correctLetter = strtoupper($am[1]);
-                }
+                $rawAns = trim($mcq['answer'] ?? '');
+                $correctLetter = strtoupper($rawAns);
 
-                foreach ($mcq['options'] as $optStr) {
-                    $optClean = trim($optStr);
-                    $optLetter = '';
-                    if (preg_match('/^([A-D])\)/i', $optClean, $om)) {
-                        $optLetter = strtoupper($om[1]);
-                    }
-                    $optTextOnly = preg_replace('/^[A-D]\)\s*/i', '', $optClean);
-
-                    $isCorrect = false;
-                    if ($correctLetter && $optLetter === $correctLetter) {
-                        $isCorrect = true;
-                    } elseif (stripos($rawAns, $optTextOnly) !== false || stripos($optTextOnly, $rawAns) !== false) {
-                        $isCorrect = true;
-                    }
+                $optionsArray = $mcq['options'] ?? [];
+                foreach ($optionsArray as $optKey => $optVal) {
+                    $optLetter = strtoupper($optKey);
+                    $optClean = "{$optLetter}) {$optVal}";
+                    $isCorrect = ($optLetter === $correctLetter);
 
                     $ans = new stdClass();
                     $ans->question = $qid;
@@ -602,21 +779,28 @@ for ($wnum = 1; $wnum <= 16; $wnum++) {
                 $qr->version = null;
                 $DB->insert_record('question_references', $qr);
 
-                $slotNum++;
                 $totalMarks += 1.0;
+                $slotNum++;
             }
 
-            $DB->set_field('quiz', 'sumgrades', $totalMarks, ['id' => $quizid]);
-            quiz_update_grades($quiz);
-            echo "  ✔ Created native Quiz: '{$quizName}' with {$totalMarks} questions in Section {$wnum}\n";
+            // Update quiz sumgrades
+            $quiz->sumgrades = $totalMarks;
+            $DB->update_record('quiz', $quiz);
+
+            // Register quiz in gradebook
+            quiz_grade_item_update($quiz);
+
+            echo "  ✔ Week {$wnum} Native Quiz created with {$totalMarks} questions: '{$quizName}'\n";
+        } else {
+            echo "  ✔ Week {$wnum} Native Quiz verified: '{$existingQuiz->name}'\n";
         }
     }
 }
 
-// ---------------------------------------------------------
-// 4. FINALIZE & REBUILD CACHES
-// ---------------------------------------------------------
+// Rebuild Course Cache so newly added modules display immediately
 rebuild_course_cache($courseid, true);
-purge_all_caches();
-
-echo "✔ Course ID {$courseid} successfully provisioned and synchronized with native Moodle structure!\n";
+echo "\n====================================================\n";
+echo "✔ Moodle Course Provisioning Complete!\n";
+echo "Course ID: {$courseid}\n";
+echo "URL: {$CFG->wwwroot}/course/view.php?id={$courseid}\n";
+echo "====================================================\n";
