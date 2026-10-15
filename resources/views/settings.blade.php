@@ -441,6 +441,61 @@
 
 @push('scripts')
 <script>
+    // --- RESET AI PROMPT TEMPLATE ---
+    const defaultAiTemplate = @json(App\Models\Setting::getDefaultAiPrompt());
+    function resetDefaultAiPrompt() {
+        if (confirm("Reset the AI System Prompt to the university recommended template?")) {
+            const el = document.getElementById('aiSystemPrompt');
+            if (el) el.value = defaultAiTemplate;
+        }
+    }
+    window.resetDefaultAiPrompt = resetDefaultAiPrompt;
+
+    // --- DYNAMIC CUSTOM DOCUMENT MAPPINGS ---
+    function addCustomDocRow(label, pattern) {
+        label = label || '';
+        pattern = pattern || '';
+        const noRow = document.getElementById('noCustomDocsRow');
+        if (noRow) noRow.remove();
+
+        const tbody = document.getElementById('customDocsBody');
+        if (!tbody) return;
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>
+                <input type="text" name="custom_doc_labels[]" class="form-control form-control-sm" value="${label}" placeholder="e.g. Lab Manual" required>
+            </td>
+            <td>
+                <input type="text" name="custom_doc_patterns[]" class="form-control form-control-sm font-monospace" value="${pattern}" placeholder="e.g. Chemistry Lab Manual.pdf" required>
+            </td>
+            <td class="text-center">
+                <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeCustomDocRow(this)">
+                    <i class="fa fa-trash"></i>
+                </button>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    }
+    window.addCustomDocRow = addCustomDocRow;
+
+    function removeCustomDocRow(btn) {
+        if (!btn) return;
+        const tr = btn.closest('tr');
+        if (tr) tr.remove();
+
+        const tbody = document.getElementById('customDocsBody');
+        if (tbody && tbody.querySelectorAll('tr').length === 0) {
+            tbody.innerHTML = `
+                <tr id="noCustomDocsRow">
+                    <td colspan="3" class="text-center text-muted small py-3">
+                        <em>No additional custom files mapped. Standard 4 core files will be discovered automatically. Click <strong>"+ Add Document Mapping"</strong> above if you have Lab Manuals or Reference Books.</em>
+                    </td>
+                </tr>
+            `;
+        }
+    }
+    window.removeCustomDocRow = removeCustomDocRow;
     // AI Provider Switcher
     const aiSelect = document.getElementById('aiProviderSelect');
     if (aiSelect) {
