@@ -30,16 +30,8 @@ class Setting extends Model
     {
         $uniId = static::resolveUniversityId($universityId);
         $setting = static::where('university_id', $uniId)->where('key', $key)->first();
-        if ($setting) {
+        if ($setting && $setting->value !== null && $setting->value !== '') {
             return $setting->value;
-        }
-
-        // Fallback to global / university 1 if not set for new university
-        if ($uniId !== 1) {
-            $defaultSetting = static::where('university_id', 1)->where('key', $key)->first();
-            if ($defaultSetting) {
-                return $defaultSetting->value;
-            }
         }
 
         return $default;
@@ -58,12 +50,12 @@ class Setting extends Model
     {
         $uniId = static::resolveUniversityId($universityId);
         $defaults = [
-            'moodle_url' => 'https://devlms.daffodilvarsity.edu.bd',
-            'moodle_token' => '1e10dad970723823f70753bf73cfef41',
-            'moodle_template_course_id' => '4',
+            'moodle_url' => '',
+            'moodle_token' => '',
+            'moodle_template_course_id' => '',
             'moodle_category_id' => '1',
             'semester_start_date' => date('Y-m-d'),
-            'gdrive_root_folder_id' => '1BcFVmPVoN9HMPSUNw1vqnOuPYKkDPcnR',
+            'gdrive_root_folder_id' => '',
             'ai_provider' => 'gemini',
             'gemini_api_key' => '',
             'gemini_model' => 'gemini-2.5-flash',
@@ -88,11 +80,7 @@ class Setting extends Model
 
         $saved = static::where('university_id', $uniId)->pluck('value', 'key')->toArray();
 
-        if ($uniId !== 1) {
-            $uni1Saved = static::where('university_id', 1)->pluck('value', 'key')->toArray();
-            $defaults = array_merge($defaults, $uni1Saved);
-        }
-
+        // Strict Multi-Tenant Isolation: Do NOT leak University 1 (NextGen) settings to other institutions
         return array_merge($defaults, $saved);
     }
 }

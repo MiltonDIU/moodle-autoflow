@@ -50,18 +50,10 @@ class UniversityController extends Controller
             'status' => 'active',
         ]);
 
-        // Copy default template settings from NextGen University (ID 1)
-        $defaultSettings = Setting::where('university_id', 1)->get();
-        foreach ($defaultSettings as $s) {
-            Setting::create([
-                'university_id' => $uni->id,
-                'key' => $s->key,
-                'value' => $s->value,
-            ]);
-        }
-
+        // Multi-Tenant Isolation: Every new university starts with a clean slate
+        // Instructors / Admins configure their own LMS URL, Google Drive folder, and CDN keys.
         return redirect()->route('universities.index')
-            ->with('success', "University '{$uni->name}' has been created with default course provisioning templates!");
+            ->with('success', "University '{$uni->name}' created successfully with an isolated, clean workspace!");
     }
 
     public function switchUniversity(Request $request, $id)
@@ -70,6 +62,14 @@ class UniversityController extends Controller
 
         $uni = University::findOrFail($id);
         session(['active_university_id' => $uni->id]);
+        $request->session()->put('active_university_id', $uni->id);
+        $request->session()->save();
+
+        $previous = url()->previous();
+        // If switching from inside a course preview of another university, redirect to dashboard
+        if (str_contains($previous, '/courses/')) {
+            return redirect()->route('dashboard')->with('success', "Active workspace switched to '{$uni->name}'.");
+        }
 
         return redirect()->back()->with('success', "Active workspace switched to '{$uni->name}'.");
     }

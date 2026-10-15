@@ -53,8 +53,8 @@ class DashboardController extends Controller
             'synced_courses' => $courses->where('status', 'completed')->count(),
             'active_driver' => Setting::get('video_storage_driver', 'gdrive', $university->id),
             'active_ai' => Setting::get('ai_provider', 'gemini', $university->id),
-            'moodle_url' => Setting::get('moodle_url', 'https://devlms.daffodilvarsity.edu.bd', $university->id),
-            'root_folder' => Setting::get('gdrive_root_folder_id', '1BcFVmPVoN9HMPSUNw1vqnOuPYKkDPcnR', $university->id),
+            'moodle_url' => Setting::get('moodle_url', '', $university->id),
+            'root_folder' => Setting::get('gdrive_root_folder_id', '', $university->id),
             'view_all' => request('view') === 'all',
             'total_stored' => Course::where('university_id', $university->id)->count(),
         ];
@@ -111,7 +111,17 @@ class DashboardController extends Controller
     public function scanFolder(Request $request)
     {
         $university = $this->getActiveUniversity();
-        $folderId = $request->input('folder_id') ?: Setting::get('gdrive_root_folder_id', '1BcFVmPVoN9HMPSUNw1vqnOuPYKkDPcnR', $university->id);
+        $folderId = trim($request->input('folder_id') ?: Setting::get('gdrive_root_folder_id', '', $university->id));
+
+        if (empty($folderId)) {
+            return redirect()->route('dashboard')->with('error', "Please enter a valid Google Drive Folder ID to scan courses for '{$university->name}'.");
+        }
+
+        // Save folder ID if not set
+        if (!Setting::get('gdrive_root_folder_id', null, $university->id)) {
+            Setting::set('gdrive_root_folder_id', $folderId, $university->id);
+        }
+
         $discovered = $this->driveService->discoverCourses($folderId);
 
         $savedCount = 0;

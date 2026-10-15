@@ -108,7 +108,11 @@
                 <div>
                     <div class="text-muted small fw-semibold text-uppercase">Target LMS</div>
                     <div class="fs-5 fw-bold text-dark text-truncate brand-font" style="max-width: 170px;">
-                        {{ parse_url($stats['moodle_url'], PHP_URL_HOST) ?? 'elearn.local' }}
+                        @if(!empty($stats['moodle_url']))
+                            {{ parse_url($stats['moodle_url'], PHP_URL_HOST) ?? $stats['moodle_url'] }}
+                        @else
+                            <span class="text-muted small fst-italic">Not Set</span>
+                        @endif
                     </div>
                 </div>
                 <div class="p-3 bg-warning bg-opacity-10 text-warning rounded-3">
@@ -144,15 +148,20 @@
 <div class="custom-card p-3 mb-4 bg-white border-start border-4 border-primary shadow-sm">
     <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
         <div class="d-flex align-items-center gap-2">
-            <span class="badge bg-primary text-uppercase px-2 py-1"><i class="fa fa-folder-tree me-1"></i> Active Root Folder</span>
-            <span class="font-monospace fw-bold text-dark fs-6">{{ $stats['root_folder'] }}</span>
-            <a href="https://drive.google.com/drive/folders/{{ $stats['root_folder'] }}" target="_blank" class="btn btn-sm btn-outline-primary py-0 px-2" style="font-size: 0.75rem;">
-                <i class="fa fa-external-link-alt me-1"></i> Open in Google Drive
-            </a>
+            @if(!empty($stats['root_folder']))
+                <span class="badge bg-primary text-uppercase px-2 py-1"><i class="fa fa-folder-tree me-1"></i> Active Root Folder</span>
+                <span class="font-monospace fw-bold text-dark fs-6">{{ $stats['root_folder'] }}</span>
+                <a href="https://drive.google.com/drive/folders/{{ $stats['root_folder'] }}" target="_blank" class="btn btn-sm btn-outline-primary py-0 px-2" style="font-size: 0.75rem;">
+                    <i class="fa fa-external-link-alt me-1"></i> Open in Google Drive
+                </a>
+            @else
+                <span class="badge bg-secondary text-uppercase px-2 py-1"><i class="fa fa-folder-open me-1"></i> No Folder Configured</span>
+                <span class="text-muted small">No Google Drive folder linked for <strong>{{ $university->name }}</strong> yet. Enter a Folder ID above and click "Scan Drive".</span>
+            @endif
         </div>
         <div>
             <span class="badge bg-light text-dark border">
-                <strong>{{ $courses->count() }}</strong> Course(s) under this root folder
+                <strong>{{ $courses->count() }}</strong> Course(s) for {{ $university->name }}
             </span>
             @if(!$stats['view_all'] && $stats['total_stored'] > $courses->count())
                 <a href="{{ route('dashboard', ['view' => 'all']) }}" class="btn btn-sm btn-link text-decoration-none py-0 ms-2 text-muted" style="font-size: 0.78rem;">
@@ -180,8 +189,8 @@
     @if($courses->isEmpty())
         <div class="p-5 text-center text-muted">
             <i class="fa fa-folder-open fs-1 mb-3 text-secondary opacity-50"></i>
-            <h5>No course folders found under this root folder</h5>
-            <p class="small mb-3">Click <strong>"Scan Drive"</strong> above with your Google Drive Folder ID to discover course subfolders.</p>
+            <h5>No course folders found for {{ $university->name }}</h5>
+            <p class="small mb-3">Enter your Google Drive Folder ID above and click <strong>"Scan Drive"</strong> to discover course subfolders for this institution.</p>
         </div>
     @else
         <div class="table-responsive">
