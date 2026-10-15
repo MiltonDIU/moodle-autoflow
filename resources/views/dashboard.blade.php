@@ -234,30 +234,44 @@
                         </td>
                         <td>
                             <span class="badge-status badge-{{ $c->status }}">
-                                @if($c->status === 'completed') <i class="fa fa-check me-1"></i> Synced
-                                @elseif($c->status === 'processing') <i class="fa fa-spinner fa-spin me-1"></i> In Progress
-                                @elseif($c->status === 'failed') <i class="fa fa-times me-1"></i> Failed
-                                @else Discovered
+                                @if($c->status === 'completed' || $c->progress >= 100) 
+                                    <i class="fa fa-check-circle text-success me-1"></i> 100% Synced
+                                @elseif($c->status === 'processing') 
+                                    <i class="fa fa-spinner fa-spin me-1"></i> In Progress
+                                @elseif($c->status === 'failed') 
+                                    <i class="fa fa-times me-1"></i> Failed
+                                @else 
+                                    Discovered
                                 @endif
                             </span>
                         </td>
                         <td style="min-width: 130px;">
                             <div class="progress" style="height: 6px; border-radius: 4px;">
-                                <div class="progress-bar bg-primary" role="progressbar" style="width: {{ $c->progress }}%;"></div>
+                                <div class="progress-bar {{ $c->progress >= 100 ? 'bg-success' : 'bg-primary' }}" role="progressbar" style="width: {{ $c->progress }}%;"></div>
                             </div>
-                            <small class="text-muted" style="font-size: 0.75rem;">{{ $c->progress }}%</small>
+                            <small class="{{ $c->progress >= 100 ? 'text-success fw-bold' : 'text-muted' }}" style="font-size: 0.75rem;">
+                                {{ $c->progress }}% @if($c->progress >= 100) (Complete) @endif
+                            </small>
                         </td>
                         <td class="text-end pe-4">
                             <div class="d-flex justify-content-end gap-2">
-                                <form action="{{ route('courses.process', $c->id) }}" method="POST" class="d-flex align-items-center gap-1">
+                                <form action="{{ route('courses.process', $c->id) }}" method="POST" class="d-flex align-items-center gap-1" id="processForm{{ $c->id }}">
                                     @csrf
                                     <div class="input-group input-group-sm" style="width: 145px;" title="Semester Start Date (16-Week Schedule)">
                                         <span class="input-group-text bg-white px-2"><i class="fa fa-calendar text-primary" style="font-size: 0.8rem;"></i></span>
                                         <input type="date" name="start_date" class="form-control form-control-sm px-1 font-monospace" style="font-size: 0.8rem;" value="{{ $c->start_date ? $c->start_date->format('Y-m-d') : date('Y-m-d') }}" required>
                                     </div>
-                                    <button type="submit" class="btn btn-sm btn-primary-custom text-nowrap" title="Build, Schedule 16 Weeks & Push to Moodle">
-                                        <i class="fa fa-sync-alt me-1"></i> Sync
-                                    </button>
+                                    @if($c->status === 'completed' || $c->progress >= 100)
+                                        <button type="button" class="btn btn-sm btn-outline-warning text-nowrap fw-semibold" 
+                                            onclick="confirmCourseResync('{{ $c->id }}', '{{ addslashes($c->name) }}', '{{ $c->moodle_course_id }}')" 
+                                            title="Course is already 100% Synced. Click to Re-sync / Overwrite.">
+                                            <i class="fa fa-redo me-1"></i> Re-sync
+                                        </button>
+                                    @else
+                                        <button type="submit" class="btn btn-sm btn-primary-custom text-nowrap" title="Build, Schedule 16 Weeks & Push to Moodle">
+                                            <i class="fa fa-sync-alt me-1"></i> Sync
+                                        </button>
+                                    @endif
                                 </form>
 
                                 <a href="{{ route('courses.preview', $c->id) }}" class="btn btn-sm btn-outline-secondary" title="Preview Curriculum">
@@ -278,4 +292,89 @@
         </div>
     @endif
 </div>
+<!-- Re-sync Overwrite Confirmation Modal -->
+<div class="modal fade" id="resyncConfirmModal" tabindex="-1" aria-labelledby="resyncModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content shadow-lg border-0" style="border-radius: 14px; overflow: hidden;">
+            <div class="modal-header bg-warning bg-opacity-10 border-bottom border-warning">
+                <h5 class="modal-title fw-bold text-dark" id="resyncModalLabel">
+                    <i class="fa fa-exclamation-triangle text-warning me-2"></i> Course Already 100% Synced
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div class="alert alert-warning py-2 px-3 small mb-3 border border-warning">
+                    <i class="fa fa-info-circle me-1"></i> <strong>Already Synced:</strong> This course has already been 100% processed and published to Moodle.
+                </div>
+
+                <div class="mb-3">
+                    <label class="text-muted small fw-semibold text-uppercase">Target Course</label>
+                    <div class="fw-bold text-dark fs-6" id="resyncModalCourseName"></div>
+                </div>
+
+                <div class="mb-3" id="resyncModalMoodleInfo">
+                    <label class="text-muted small fw-semibold text-uppercase">Moodle Destination</label>
+                    <div>
+                        <span class="badge bg-success" id="resyncModalMoodleBadge"></span>
+                    </div>
+                </div>
+
+                <div class="p-3 bg-light rounded-3 border">
+                    <div class="fw-bold text-dark small mb-1">
+                        <i class="fa fa-sync-alt text-primary me-1"></i> Overwrite Confirmation
+                    </div>
+                    <p class="text-muted small mb-0">
+                        Are you sure you want to <strong>overwrite & re-sync</strong> this course?
+                        <br><br>
+                        <i class="fa fa-shield-alt text-success me-1"></i> <em>Smart Incremental Protection: Existing 100% completed videos will NOT be re-encoded. Only newly added materials or schedule adjustments will be updated.</em>
+                    </p>
+                </div>
+            </div>
+            <div class="modal-footer bg-light border-top">
+                <button type="button" class="btn btn-secondary px-3" data-bs-dismiss="modal">
+                    <i class="fa fa-times me-1"></i> Cancel
+                </button>
+                <button type="button" class="btn btn-warning px-4 fw-bold text-dark shadow-sm" id="btnConfirmResyncAction">
+                    <i class="fa fa-redo me-1"></i> Yes, Overwrite & Re-sync
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
 @endsection
+
+@push('scripts')
+<script>
+    let activeResyncFormId = null;
+
+    window.confirmCourseResync = function(courseId, courseName, moodleCourseId) {
+        activeResyncFormId = 'processForm' + courseId;
+
+        document.getElementById('resyncModalCourseName').textContent = courseName;
+        const moodleBadge = document.getElementById('resyncModalMoodleBadge');
+        const moodleInfo = document.getElementById('resyncModalMoodleInfo');
+
+        if (moodleCourseId && moodleCourseId > 0) {
+            moodleBadge.textContent = 'Published in Moodle (Course ID: #' + moodleCourseId + ')';
+            moodleInfo.classList.remove('d-none');
+        } else {
+            moodleInfo.classList.add('d-none');
+        }
+
+        const modalEl = document.getElementById('resyncConfirmModal');
+        const modal = new bootstrap.Modal(modalEl);
+        modal.show();
+    };
+
+    document.getElementById('btnConfirmResyncAction').addEventListener('click', function() {
+        if (activeResyncFormId) {
+            const form = document.getElementById(activeResyncFormId);
+            if (form) {
+                this.innerHTML = '<i class="fa fa-spinner fa-spin me-1"></i> Starting Re-sync...';
+                this.disabled = true;
+                form.submit();
+            }
+        }
+    });
+</script>
+@endpush
