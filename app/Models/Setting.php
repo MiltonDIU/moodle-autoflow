@@ -84,7 +84,6 @@ class Setting extends Model
         // Strict Multi-Tenant Isolation: Do NOT leak University 1 (NextGen) settings to other institutions
         return array_merge($defaults, $saved);
     }
-}
 
     public static function getDefaultAiPrompt(): string
     {
