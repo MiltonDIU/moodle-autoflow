@@ -10,7 +10,8 @@ require_once($CFG->dirroot . '/mod/quiz/locallib.php');
 require_once($CFG->dirroot . '/mod/url/lib.php');
 require_once($CFG->libdir . '/questionlib.php');
 
-global $DB, $CFG;
+global $DB, $CFG, $USER;
+$USER = get_admin();
 
 $payloadFile = '/tmp/moodle_sync_payload.json';
 if (!file_exists($payloadFile)) {
@@ -390,7 +391,10 @@ function sync_assignment_activity($courseid, $sectionnum, $assignTitle, $assignm
  * Students and instructors can participate and reply
  */
 function sync_forum_activity($courseid, $sectionnum, $forumTitle, $discussionData, $weekDates = []) {
-    global $DB;
+    global $DB, $USER;
+    if (empty($USER->id)) {
+        $USER = get_admin();
+    }
     $forummodule = $DB->get_record('modules', ['name' => 'forum']);
     $modinfo = get_fast_modinfo($courseid);
 
@@ -458,6 +462,23 @@ function sync_forum_activity($courseid, $sectionnum, $forumTitle, $discussionDat
     $forumId = forum_add_instance($forumData);
     $DB->set_field('course_modules', 'instance', $forumId, ['id' => $fcmid]);
     course_add_cm_to_section($courseid, $fcmid, $sectionnum);
+
+    // Guarantee all discussions & posts in this forum have a valid author (admin user)
+    $discussions = $DB->get_records('forum_discussions', ['forum' => $forumId]);
+    foreach ($discussions as $disc) {
+        if (empty($disc->userid)) {
+            $disc->userid = $USER->id;
+            $disc->usermodified = $USER->id;
+            $DB->update_record('forum_discussions', $disc);
+        }
+        if (!empty($disc->firstpost)) {
+            $fpost = $DB->get_record('forum_posts', ['id' => $disc->firstpost]);
+            if ($fpost && empty($fpost->userid)) {
+                $fpost->userid = $USER->id;
+                $DB->update_record('forum_posts', $fpost);
+            }
+        }
+    }
 
     return $fcmid;
 }
