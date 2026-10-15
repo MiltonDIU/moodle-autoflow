@@ -186,26 +186,86 @@ class DashboardController extends Controller
             $scanData = $this->driveService->scanCourseFolder($course->gdrive_folder_id, $uniId);
             $course->update(['progress' => 35]);
 
-            // 2. Extract Curriculum using selected AI Provider
-            $aiProviderName = Setting::get('ai_provider', 'gemini', $uniId);
-            $curriculum = $this->aiExtractor->extractCurriculum($scanData['documents'], $course->name, $aiProviderName);
-            $course->update(['extracted_data' => $curriculum, 'progress' => 60]);
+            // 2. Extract Curriculum using selected AI Provider (Smart Cache: reuse if already extracted)
+            $existingCurriculum = (is_array($course->extracted_data) && count($course->extracted_data) >= 14) 
+                ? $course->extracted_data 
+                : null;
 
-            // 3. Process Videos via Selected Driver
+            if ($existingCurriculum && !$request->boolean('force_ai')) {
+                $curriculum = $existingCurriculum;
+            } else {
+                $aiProviderName = Setting::get('ai_provider', 'gemini', $uniId);
+                $curriculum = $this->aiExtractor->extractCurriculum($scanData['documents'], $course->name, $aiProviderName);
+                $course->update(['extracted_data' => $curriculum]);
+            }
+            $course->update(['progress' => 60]);
+
+            // 3. Process Videos via Selected Driver (Smart Incremental: do not re-encode existing videos)
             $driverName = Setting::get('video_storage_driver', 'gdrive', $uniId);
             $driver = VideoStorageManager::getDriver($driverName);
+
+            $existingVideoMap = is_array($course->video_map) ? $course->video_map : [];
+
+            // Index existing processed videos by file_id and week + filename
+            $existingLookup = [];
+            foreach ($existingVideoMap as $w => $vList) {
+                if (is_array($vList)) {
+                    foreach ($vList as $existingV) {
+                        $fId = $existingV['file_id'] ?? null;
+                        $fName = $existingV['filename'] ?? null;
+                        $vDriver = $existingV['driver'] ?? null;
+
+                        $hasVideo = !empty($existingV['video_id']) || !empty($existingV['stream_url']) || !empty($existingV['embed_code']);
+                        $isSameDriver = ($vDriver === $driverName) || ($vDriver === 'bunny_fallback_gdrive' && $driverName === 'bunny');
+
+                        if ($hasVideo && $isSameDriver) {
+                            if ($fId) {
+                                $existingLookup['id_' . $fId] = $existingV;
+                            }
+                            if ($fName) {
+                                $cleanName = strtolower(trim($fName));
+                                $existingLookup['fn_' . $w . '_' . $cleanName] = $existingV;
+                                $existingLookup['fn_any_' . $cleanName] = $existingV;
+                            }
+                        }
+                    }
+                }
+            }
 
             $processedVideos = [];
             foreach ($scanData['weeks_videos'] as $wnum => $wdata) {
                 $processedVideos[$wnum] = [];
                 foreach ($wdata['videos'] as $v) {
-                    $res = $driver->processVideo([
-                        'file_id' => $v['file_id'],
-                        'filename' => $v['filename'],
-                        'course_code' => $course->course_code,
-                        'week_num' => $wnum
-                    ]);
-                    $processedVideos[$wnum][] = $res;
+                    $fId = $v['file_id'] ?? '';
+                    $fName = strtolower(trim($v['filename'] ?? ''));
+
+                    $matchedExisting = null;
+                    if ($fId && isset($existingLookup['id_' . $fId])) {
+                        $matchedExisting = $existingLookup['id_' . $fId];
+                    } elseif ($fName && isset($existingLookup['fn_' . $wnum . '_' . $fName])) {
+                        $matchedExisting = $existingLookup['fn_' . $wnum . '_' . $fName];
+                    } elseif ($fName && isset($existingLookup['fn_any_' . $fName])) {
+                        $matchedExisting = $existingLookup['fn_any_' . $fName];
+                    }
+
+                    if ($matchedExisting) {
+                        // Already processed with active driver: reuse existing metadata!
+                        $matchedExisting['file_id'] = $fId ?: ($matchedExisting['file_id'] ?? '');
+                        $matchedExisting['filename'] = $v['filename'] ?? ($matchedExisting['filename'] ?? '');
+                        $processedVideos[$wnum][] = $matchedExisting;
+                    } else {
+                        // Brand new video: process / encode via driver
+                        $res = $driver->processVideo([
+                            'file_id' => $v['file_id'],
+                            'filename' => $v['filename'],
+                            'course_code' => $course->course_code,
+                            'course_name' => $course->name,
+                            'week_num' => $wnum
+                        ]);
+                        $res['file_id'] = $v['file_id'];
+                        $res['filename'] = $v['filename'];
+                        $processedVideos[$wnum][] = $res;
+                    }
                 }
             }
             $course->update(['video_map' => $processedVideos, 'storage_driver' => $driverName, 'progress' => 80]);

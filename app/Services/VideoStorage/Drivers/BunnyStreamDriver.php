@@ -77,6 +77,7 @@ class BunnyStreamDriver implements VideoStorageDriverInterface
 
     public function processVideo(array $fileInfo): array
     {
+        $fileId = $fileInfo['file_id'] ?? '';
         $filename = $fileInfo['filename'];
         $courseCode = $fileInfo['course_code'] ?? 'Course';
         $courseName = $fileInfo['course_name'] ?? $courseCode;
@@ -91,60 +92,92 @@ class BunnyStreamDriver implements VideoStorageDriverInterface
         }
 
         try {
-            // Google Drive direct download URL
-            $downloadUrl = "https://drive.usercontent.google.com/download?id={$fileInfo['file_id']}&export=download&confirm=t";
-            $videoTitle = "{$courseCode} - Week {$weekNum} - {$filename}";
-
             // Ensure Collection (Course Folder) exists
             $collectionId = $this->getOrCreateCollection($courseName);
+            $videoTitle = "{$courseCode} - Week {$weekNum} - {$filename}";
 
-            $fetchPayload = [
-                'title' => $videoTitle,
-                'url' => $downloadUrl
+            // 1. Check if video already exists in Bunny Library to prevent duplicate re-encoding
+            $searchQuery = [
+                'search' => $videoTitle,
+                'itemsPerPage' => 10
             ];
             if ($collectionId) {
-                $fetchPayload['collectionId'] = $collectionId;
+                $searchQuery['collection'] = $collectionId;
             }
 
-            // Call official Bunny Stream Fetch API directly
-            $res = Http::withHeaders([
+            $searchRes = Http::withHeaders([
                 'AccessKey' => $this->apiKey,
-                'Content-Type' => 'application/json',
                 'accept' => 'application/json'
-            ])->post("https://video.bunnycdn.com/library/{$this->libraryId}/videos/fetch", $fetchPayload);
+            ])->get("https://video.bunnycdn.com/library/{$this->libraryId}/videos", $searchQuery);
 
-            if ($res->successful()) {
-                $data = $res->json();
-                $videoId = $data['id'] ?? ($data['guid'] ?? null);
-
-                if ($videoId) {
-                    $embedUrl = "https://{$this->pullZone}/embed/{$this->libraryId}/{$videoId}";
-                    $streamUrl = "https://{$this->pullZone}/{$videoId}/playlist.m3u8";
-
-                    $embedCode = sprintf(
-                        '<div style="position: relative; padding-top: 56.25%%; border-radius: 10px; overflow: hidden; margin-bottom: 16px; border: 1px solid #cbd5e1; background: #000;">' .
-                        '<iframe src="%s" loading="lazy" style="border: none; position: absolute; top: 0; height: 100%%; width: 100%%;" allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture;" allowfullscreen="true"></iframe>' .
-                        '</div>',
-                        $embedUrl
-                    );
-
-                    return [
-                        'driver' => 'bunny',
-                        'video_id' => $videoId,
-                        'collection_id' => $collectionId,
-                        'filename' => $filename,
-                        'embed_code' => $embedCode,
-                        'stream_url' => $streamUrl,
-                        'direct_url' => $embedUrl
-                    ];
+            $existingVideo = null;
+            if ($searchRes->successful()) {
+                $items = $searchRes->json('items') ?? [];
+                foreach ($items as $item) {
+                    if (strcasecmp(trim($item['title'] ?? ''), trim($videoTitle)) === 0) {
+                        // Prefer finished video (status 2 = Finished) or existing video
+                        if (($item['status'] ?? 0) === 2 || empty($existingVideo)) {
+                            $existingVideo = $item;
+                        }
+                    }
                 }
+            }
+
+            $videoId = $existingVideo['guid'] ?? null;
+
+            // 2. Only if video does NOT exist in Bunny, trigger video fetch / encoding
+            if (!$videoId) {
+                $downloadUrl = "https://drive.usercontent.google.com/download?id={$fileId}&export=download&confirm=t";
+                $fetchPayload = [
+                    'title' => $videoTitle,
+                    'url' => $downloadUrl
+                ];
+                if ($collectionId) {
+                    $fetchPayload['collectionId'] = $collectionId;
+                }
+
+                $res = Http::withHeaders([
+                    'AccessKey' => $this->apiKey,
+                    'Content-Type' => 'application/json',
+                    'accept' => 'application/json'
+                ])->post("https://video.bunnycdn.com/library/{$this->libraryId}/videos/fetch", $fetchPayload);
+
+                if ($res->successful()) {
+                    $data = $res->json();
+                    $videoId = $data['id'] ?? ($data['guid'] ?? null);
+                }
+            }
+
+            if ($videoId) {
+                $embedUrl = "https://{$this->pullZone}/embed/{$this->libraryId}/{$videoId}";
+                $streamUrl = "https://{$this->pullZone}/{$videoId}/playlist.m3u8";
+
+                $embedCode = sprintf(
+                    '<div style="position: relative; padding-top: 56.25%%; border-radius: 10px; overflow: hidden; margin-bottom: 16px; border: 1px solid #cbd5e1; background: #000;">' .
+                    '<iframe src="%s" loading="lazy" style="border: none; position: absolute; top: 0; height: 100%%; width: 100%%;" allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture;" allowfullscreen="true"></iframe>' .
+                    '</div>',
+                    $embedUrl
+                );
+
+                return [
+                    'driver' => 'bunny',
+                    'file_id' => $fileId,
+                    'video_id' => $videoId,
+                    'collection_id' => $collectionId,
+                    'filename' => $filename,
+                    'embed_code' => $embedCode,
+                    'stream_url' => $streamUrl,
+                    'direct_url' => $embedUrl
+                ];
             }
         } catch (\Exception $e) {
             // If bunny call fails, fallback gracefully
         }
 
         $fallback = new GoogleDriveDriver();
-        return $fallback->processVideo($fileInfo);
+        $fallbackRes = $fallback->processVideo($fileInfo);
+        $fallbackRes['driver'] = 'bunny_fallback_gdrive';
+        return $fallbackRes;
     }
 
     public function testConnection(): array
