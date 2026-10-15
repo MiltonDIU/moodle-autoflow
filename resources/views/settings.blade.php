@@ -67,6 +67,12 @@
                         <small class="text-muted">Target Moodle category (Default: 1).</small>
                     </div>
 
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold small text-primary"><i class="fa fa-calendar-alt me-1"></i> Default Semester Start Date <span class="text-danger">*</span></label>
+                        <input type="date" name="semester_start_date" class="form-control fw-bold border-primary" value="{{ $settings['semester_start_date'] ?? date('Y-m-d') }}" required>
+                        <small class="text-muted">Baseline date for computing the 16-week timetable (weekly deadlines, assignments, midterm & final quiz periods).</small>
+                    </div>
+
                     <div class="col-md-12">
                         <label class="form-label fw-semibold small">Moodle Web Services REST Token (For Remote API)</label>
                         <div class="input-group">

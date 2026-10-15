@@ -10,6 +10,7 @@ class Course extends Model
         'university_id',
         'name',
         'course_code',
+        'start_date',
         'gdrive_folder_id',
         'status',
         'progress',
@@ -21,6 +22,7 @@ class Course extends Model
     ];
 
     protected $casts = [
+        'start_date' => 'date',
         'extracted_data' => 'array',
         'video_map' => 'array',
         'progress' => 'integer'

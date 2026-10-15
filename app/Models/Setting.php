@@ -62,6 +62,7 @@ class Setting extends Model
             'moodle_token' => '1e10dad970723823f70753bf73cfef41',
             'moodle_template_course_id' => '4',
             'moodle_category_id' => '1',
+            'semester_start_date' => date('Y-m-d'),
             'gdrive_root_folder_id' => '1BcFVmPVoN9HMPSUNw1vqnOuPYKkDPcnR',
             'ai_provider' => 'gemini',
             'gemini_api_key' => '',

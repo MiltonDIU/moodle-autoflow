@@ -5,104 +5,124 @@ namespace App\Services;
 use App\Models\Setting;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Process;
+use Illuminate\Support\Facades\Log;
 
 class MoodleApiService
 {
-    protected ?string $moodleUrl;
-    protected ?string $token;
-    protected ?int $templateCourseId;
+    protected string $moodleUrl;
+    protected ?string $token = null;
 
     public function __construct()
     {
         $this->moodleUrl = rtrim(Setting::get('moodle_url', 'http://elearn.local'), '/');
-        $this->token = Setting::get('moodle_token', '');
-        $this->templateCourseId = (int) Setting::get('moodle_template_course_id', 130);
+        $this->token = Setting::get('moodle_token') ?: '';
     }
 
     /**
-     * Test Moodle connection prioritizing remote Web Services REST API
+     * Test connection to Moodle Web Services with strict validation
      */
     public function testConnection(?string $customUrl = null, ?string $customToken = null): array
     {
         $url = rtrim($customUrl ?: $this->moodleUrl, '/');
-        $token = $customToken !== null ? $customToken : $this->token;
+        $token = $customToken ?: $this->token;
 
-        // 1. If Token is provided or URL is a remote web domain, test via Web Services REST API
-        if (!empty($token) || (!str_contains($url, 'localhost') && !str_contains($url, 'elearn.local'))) {
-            if (empty($token)) {
-                return [
-                    'success' => false,
-                    'message' => "Moodle URL is set to '{$url}', but Web Services REST Token is missing! Please provide the token."
-                ];
-            }
+        if (empty($url)) {
+            return [
+                'success' => false,
+                'message' => 'Moodle URL is empty. Please enter a valid URL (e.g., http://elearn.local).'
+            ];
+        }
 
-            try {
-                $endpoint = "{$url}/webservice/rest/server.php";
-                $response = Http::timeout(15)->withoutVerifying()->get($endpoint, [
+        if (empty($token)) {
+            return [
+                'success' => false,
+                'message' => 'Moodle Web Service Token is empty. Please generate a token in Moodle Site Administration.'
+            ];
+        }
+
+        $endpoint = "{$url}/webservice/rest/server.php";
+
+        try {
+            $response = Http::timeout(8)
+                ->asForm()
+                ->post($endpoint, [
                     'wstoken' => $token,
                     'wsfunction' => 'core_webservice_get_site_info',
                     'moodlewsrestformat' => 'json'
                 ]);
 
-                if ($response->successful()) {
-                    $data = $response->json();
-                    
-                    if (isset($data['exception']) || isset($data['errorcode'])) {
-                        $errMsg = $data['message'] ?? $data['errorcode'];
-                        return [
-                            'success' => false,
-                            'message' => "Moodle API Error: {$errMsg} (URL: {$url})"
-                        ];
-                    }
-
-                    $sitename = $data['sitename'] ?? 'Moodle LMS';
-                    $user = $data['fullname'] ?? ($data['username'] ?? 'Admin');
-                    $release = $data['release'] ?? 'Standard';
-
-                    return [
-                        'success' => true,
-                        'message' => "Connected to Remote Moodle: \"{$sitename}\" | User: {$user} | Release: {$release} (Host: {$url})"
-                    ];
-                }
-
+            if ($response->status() === 403) {
                 return [
                     'success' => false,
-                    'message' => "Failed to reach Moodle server (HTTP {$response->status()}). Please verify the URL: {$endpoint}"
-                ];
-
-            } catch (\Exception $e) {
-                return [
-                    'success' => false,
-                    'message' => "Connection failed: " . $e->getMessage()
+                    'message' => "Failed to reach Moodle server (HTTP 403 Forbidden). Please check server permissions, web server rules, or reverse proxy settings."
                 ];
             }
-        }
 
-        // 2. Fallback to local CLI if URL is elearn.local/localhost
-        $cliCheck = Process::run("php /home/milton/Projects/elearn/admin/cli/cfg.php --name=release");
-        if ($cliCheck->successful()) {
+            if ($response->status() === 404) {
+                return [
+                    'success' => false,
+                    'message' => "Moodle Web Service endpoint not found (HTTP 404). Verify that {$endpoint} is accessible."
+                ];
+            }
+
+            if (!$response->successful()) {
+                return [
+                    'success' => false,
+                    'message' => "Failed to connect to Moodle (HTTP {$response->status()}). Please verify the URL and server accessibility."
+                ];
+            }
+
+            $data = $response->json();
+
+            if (isset($data['exception'])) {
+                $errorMsg = $data['message'] ?? 'Invalid token or web service permission denied.';
+                return [
+                    'success' => false,
+                    'message' => "Moodle Error: {$errorMsg}"
+                ];
+            }
+
+            if (!empty($data['sitename'])) {
+                $siteName = $data['sitename'];
+                $release = $data['release'] ?? 'Unknown version';
+                return [
+                    'success' => true,
+                    'message' => "Connected successfully to {$siteName} (Moodle {$release})!",
+                    'site_info' => $data
+                ];
+            }
+
             return [
-                'success' => true,
-                'message' => 'Connected to Local Moodle CLI: ' . trim($cliCheck->output()) . ' (' . $url . ')'
+                'success' => false,
+                'message' => 'Received unexpected response format from Moodle server.'
+            ];
+
+        } catch (\Exception $e) {
+            return [
+                'success' => false,
+                'message' => 'Connection failed: ' . $e->getMessage()
             ];
         }
-
-        return [
-            'success' => false,
-            'message' => "Cannot connect to Moodle. Please verify URL: {$url}"
-        ];
     }
 
     /**
-     * Duplicate or sync course with dynamic discovery and auto-creation
+     * Duplicate or sync course with dynamic discovery, auto-creation, and semester start date
      */
-    public function provisionCourse(string $courseName, string $courseCode, array $curriculum, array $processedVideos, array $generalDocs, ?int $existingCourseId = null): array
-    {
+    public function provisionCourse(
+        string $courseName,
+        string $courseCode,
+        array $curriculum,
+        array $processedVideos,
+        array $generalDocs,
+        ?int $existingCourseId = null,
+        ?string $startDate = null
+    ): array {
         // Save payload to temp json for the PHP CLI runner
         $payload = [
             'course_id' => $existingCourseId,
             'fullname' => $courseName,
             'shortname' => $courseCode,
+            'start_date' => $startDate,
             'category_id' => (int) Setting::get('moodle_category_id', 2),
             'curriculum' => $curriculum,
             'processed_videos' => $processedVideos,

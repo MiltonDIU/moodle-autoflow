@@ -191,9 +191,10 @@
                         <th class="ps-4">Course Name & Code</th>
                         <th>Drive Subfolder</th>
                         <th>Storage Driver</th>
+                        <th>Semester Timeline</th>
                         <th>Status</th>
                         <th>Progress</th>
-                        <th class="text-end pe-4">Actions</th>
+                        <th class="text-end pe-4">Actions & Sync</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -215,6 +216,14 @@
                             <span class="badge bg-light text-primary border text-uppercase">{{ $c->storage_driver }}</span>
                         </td>
                         <td>
+                            @if($c->start_date)
+                                <div class="fw-bold text-dark small"><i class="fa fa-calendar-check text-success me-1"></i> {{ $c->start_date->format('M d, Y') }}</div>
+                                <div class="text-muted" style="font-size: 0.75rem;">16 Weeks (Ends {{ $c->start_date->copy()->addWeeks(16)->format('M d, Y') }})</div>
+                            @else
+                                <span class="badge bg-light text-muted border"><i class="fa fa-calendar-times me-1"></i> Not set</span>
+                            @endif
+                        </td>
+                        <td>
                             <span class="badge-status badge-{{ $c->status }}">
                                 @if($c->status === 'completed') <i class="fa fa-check me-1"></i> Synced
                                 @elseif($c->status === 'processing') <i class="fa fa-spinner fa-spin me-1"></i> In Progress
@@ -231,10 +240,14 @@
                         </td>
                         <td class="text-end pe-4">
                             <div class="d-flex justify-content-end gap-2">
-                                <form action="{{ route('courses.process', $c->id) }}" method="POST" class="d-inline">
+                                <form action="{{ route('courses.process', $c->id) }}" method="POST" class="d-flex align-items-center gap-1">
                                     @csrf
-                                    <button type="submit" class="btn btn-sm btn-primary-custom" title="Build & Push to Moodle">
-                                        <i class="fa fa-play me-1"></i> Sync Moodle
+                                    <div class="input-group input-group-sm" style="width: 145px;" title="Semester Start Date (16-Week Schedule)">
+                                        <span class="input-group-text bg-white px-2"><i class="fa fa-calendar text-primary" style="font-size: 0.8rem;"></i></span>
+                                        <input type="date" name="start_date" class="form-control form-control-sm px-1 font-monospace" style="font-size: 0.8rem;" value="{{ $c->start_date ? $c->start_date->format('Y-m-d') : date('Y-m-d') }}" required>
+                                    </div>
+                                    <button type="submit" class="btn btn-sm btn-primary-custom text-nowrap" title="Build, Schedule 16 Weeks & Push to Moodle">
+                                        <i class="fa fa-sync-alt me-1"></i> Sync
                                     </button>
                                 </form>
 

@@ -21,6 +21,7 @@ $payload = json_decode(file_get_contents($payloadFile), true);
 $requestedCourseId = $payload['course_id'] ?? null;
 $fullname = trim($payload['fullname'] ?? '');
 $shortname = trim($payload['shortname'] ?? '');
+$startDateStr = $payload['start_date'] ?? null;
 $categoryId = (int) ($payload['category_id'] ?? 2);
 $curriculum = $payload['curriculum'] ?? [];
 $processedVideos = $payload['processed_videos'] ?? [];
@@ -31,6 +32,7 @@ echo "Starting Moodle Course Synchronization / Auto-Provision\n";
 echo "Target Course Name: {$fullname}\n";
 echo "Target Course Code: {$shortname}\n";
 echo "Requested Course ID: " . ($requestedCourseId ?: 'None (Auto-discover/create)') . "\n";
+echo "Semester Start Date: " . ($startDateStr ?: 'Auto (Current date)') . "\n";
 echo "====================================================\n";
 
 // ---------------------------------------------------------
@@ -83,6 +85,18 @@ if (!$course && !empty($fullname)) {
     }
 }
 
+// ---------------------------------------------------------
+// SEMESTER START & END TIMESTAMPS
+// ---------------------------------------------------------
+if (!empty($startDateStr)) {
+    $semesterStart = strtotime(date('Y-m-d 00:00:00', strtotime($startDateStr)));
+} elseif (!empty($course->startdate) && $course->startdate > 0) {
+    $semesterStart = $course->startdate;
+} else {
+    $semesterStart = strtotime(date('Y-m-d 00:00:00'));
+}
+$semesterEnd = strtotime('+16 weeks', $semesterStart);
+
 // Priority 4: Course NOT FOUND -> AUTO-CREATE IN MOODLE!
 if (!$course) {
     echo "⚡ Course not found in Moodle! Auto-creating new course...\n";
@@ -106,6 +120,8 @@ if (!$course) {
     $cData->category = $categoryId;
     $cData->format = 'topics';
     $cData->numsections = 16;
+    $cData->startdate = $semesterStart;
+    $cData->enddate = $semesterEnd;
     $cData->visible = 1;
     $cData->timecreated = time();
     $cData->timemodified = time();
@@ -113,16 +129,19 @@ if (!$course) {
     $course = create_course($cData);
     echo "✔ Successfully created new Moodle course with ID: {$course->id} ('{$course->fullname}')\n";
 } else {
-    // Update existing course details to ensure name consistency
+    // Update existing course details to ensure name and semester dates consistency
     $course->fullname = $fullname;
     $course->shortname = $shortname;
+    $course->startdate = $semesterStart;
+    $course->enddate = $semesterEnd;
     $course->visible = 1;
     $DB->update_record('course', $course);
-    echo "✔ Course details updated: ID {$course->id} ('{$course->fullname}')\n";
+    echo "✔ Course details & semester dates updated: ID {$course->id} ('{$course->fullname}')\n";
 }
 
 $courseid = (int) $course->id;
 echo "FINAL_MOODLE_COURSE_ID:{$courseid}\n";
+echo "✔ Semester Duration: " . date('M d, Y', $semesterStart) . " to " . date('M d, Y', $semesterEnd) . " (16 Weeks)\n";
 
 // ---------------------------------------------------------
 // HELPER FUNCTIONS FOR REAL MOODLE ACTIVITIES
@@ -240,11 +259,11 @@ function remove_obsolete_label($courseid, $sectionnum, $labelSearch) {
 }
 
 /**
- * Synchronize Real Moodle Assignment (mod_assign)
+ * Synchronize Real Moodle Assignment (mod_assign) with Semester Dates
  * Students can submit files (PDF, Word) or online text
  * Teachers can grade and provide feedback
  */
-function sync_assignment_activity($courseid, $sectionnum, $assignTitle, $assignmentData) {
+function sync_assignment_activity($courseid, $sectionnum, $assignTitle, $assignmentData, $weekDates = []) {
     global $DB;
     $assignmodule = $DB->get_record('modules', ['name' => 'assign']);
     $modinfo = get_fast_modinfo($courseid);
@@ -253,11 +272,22 @@ function sync_assignment_activity($courseid, $sectionnum, $assignTitle, $assignm
     $blooms = is_array($assignmentData) ? ($assignmentData['blooms_level'] ?? 'Analyze, Apply, Evaluate') : 'Analyze, Apply, Evaluate';
     $rubric = is_array($assignmentData) ? ($assignmentData['rubric_raw'] ?? '') : '';
 
+    $openFormatted = !empty($weekDates['start']) ? date('M d, Y h:i A', $weekDates['start']) : 'Semester Start';
+    $dueFormatted = !empty($weekDates['due']) ? date('M d, Y h:i A', $weekDates['due']) : 'End of Week';
+
     $introHtml = '<div style="font-family: inherit; line-height: 1.6; color: #1e293b;">';
     $introHtml .= '<div style="background: #f0fdf4; border-left: 4px solid #16a34a; padding: 16px 20px; border-radius: 8px; margin-bottom: 16px;">';
-    $introHtml .= '<h4 style="color: #166534; margin: 0 0 10px 0; font-weight: 700;"><i class="fa fa-file-text-o mr-2"></i> Assignment Instructions & Task Guidelines</h4>';
+    $introHtml .= '<div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">';
+    $introHtml .= '<h4 style="color: #166534; margin: 0; font-weight: 700;"><i class="fa fa-file-text-o mr-2"></i> Assignment Instructions & Task Guidelines</h4>';
+    if (!empty($weekDates['due'])) {
+        $introHtml .= '<span style="background: #dcfce7; color: #15803d; border: 1px solid #86efac; padding: 4px 10px; border-radius: 6px; font-size: 0.82rem; font-weight: 600;"><i class="fa fa-clock-o mr-1"></i> Due Date: ' . $dueFormatted . '</span>';
+    }
+    $introHtml .= '</div>';
     $introHtml .= '<p style="margin: 0; font-size: 1rem; color: #1e293b; line-height: 1.6;">' . nl2br(htmlspecialchars($taskText)) . '</p>';
     $introHtml .= '<div style="margin-top: 12px; font-size: 0.88rem; color: #15803d;"><strong>Bloom’s Taxonomy Level:</strong> ' . htmlspecialchars($blooms) . '</div>';
+    if (!empty($weekDates['start'])) {
+        $introHtml .= '<div style="margin-top: 6px; font-size: 0.82rem; color: #166534;"><strong>Submissions Open:</strong> ' . $openFormatted . '</div>';
+    }
     $introHtml .= '</div>';
 
     if (!empty($rubric)) {
@@ -281,6 +311,12 @@ function sync_assignment_activity($courseid, $sectionnum, $assignTitle, $assignm
                 if ($assignRecord) {
                     $assignRecord->name = $assignTitle;
                     $assignRecord->intro = $introHtml;
+                    if (!empty($weekDates['start'])) {
+                        $assignRecord->allowsubmissionsfromdate = $weekDates['start'];
+                        $assignRecord->duedate = $weekDates['due'];
+                        $assignRecord->cutoffdate = $weekDates['cutoff'];
+                        $assignRecord->gradingduedate = $weekDates['gradingdue'];
+                    }
                     $assignRecord->timemodified = time();
                     $DB->update_record('assign', $assignRecord);
                     return $cmid;
@@ -317,10 +353,13 @@ function sync_assignment_activity($courseid, $sectionnum, $assignTitle, $assignm
     $assignData->sendnotifications = 0;
     $assignData->sendlatenotifications = 0;
     $assignData->sendstudentnotifications = 1;
-    $assignData->duedate = 0;
-    $assignData->cutoffdate = 0;
-    $assignData->gradingduedate = 0;
-    $assignData->allowsubmissionsfromdate = time();
+
+    // Dates
+    $assignData->allowsubmissionsfromdate = !empty($weekDates['start']) ? $weekDates['start'] : time();
+    $assignData->duedate = !empty($weekDates['due']) ? $weekDates['due'] : 0;
+    $assignData->cutoffdate = !empty($weekDates['cutoff']) ? $weekDates['cutoff'] : 0;
+    $assignData->gradingduedate = !empty($weekDates['gradingdue']) ? $weekDates['gradingdue'] : 0;
+
     $assignData->grade = 100;
     $assignData->teamsubmission = 0;
     $assignData->requireallteammemberssubmit = 0;
@@ -350,7 +389,7 @@ function sync_assignment_activity($courseid, $sectionnum, $assignTitle, $assignm
  * Synchronize Real Moodle Discussion Forum (mod_forum)
  * Students and instructors can participate and reply
  */
-function sync_forum_activity($courseid, $sectionnum, $forumTitle, $discussionData) {
+function sync_forum_activity($courseid, $sectionnum, $forumTitle, $discussionData, $weekDates = []) {
     global $DB;
     $forummodule = $DB->get_record('modules', ['name' => 'forum']);
     $modinfo = get_fast_modinfo($courseid);
@@ -359,7 +398,12 @@ function sync_forum_activity($courseid, $sectionnum, $forumTitle, $discussionDat
 
     $introHtml = '<div style="font-family: inherit; line-height: 1.6; color: #1e293b;">';
     $introHtml .= '<div style="background: #fffdf5; border-left: 4px solid #f59e0b; padding: 16px 20px; border-radius: 8px; margin-bottom: 14px;">';
-    $introHtml .= '<h4 style="color: #92400e; margin: 0 0 10px 0; font-weight: 700;"><i class="fa fa-comments mr-2"></i> Weekly Discussion Topic & Discussion Prompt</h4>';
+    $introHtml .= '<div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">';
+    $introHtml .= '<h4 style="color: #92400e; margin: 0; font-weight: 700;"><i class="fa fa-comments mr-2"></i> Weekly Discussion Topic & Discussion Prompt</h4>';
+    if (!empty($weekDates['date_str'])) {
+        $introHtml .= '<span style="background: #fef3c7; color: #92400e; border: 1px solid #fcd34d; padding: 4px 10px; border-radius: 6px; font-size: 0.82rem; font-weight: 600;"><i class="fa fa-calendar mr-1"></i> ' . $weekDates['date_str'] . '</span>';
+    }
+    $introHtml .= '</div>';
     $introHtml .= '<p style="margin: 0; font-size: 1rem; color: #78350f; line-height: 1.6;">' . nl2br(htmlspecialchars($promptText)) . '</p>';
     $introHtml .= '</div>';
     $introHtml .= '<p style="color: #64748b; font-size: 0.9rem; margin: 0;"><i class="fa fa-info-circle mr-1"></i> Post your response and engage in academic debate with your fellow classmates below.</p>';
@@ -433,7 +477,7 @@ foreach ($generalDocs as $doc) {
 echo "✔ Section 0 Course Materials & Documents synchronized.\n";
 
 // ---------------------------------------------------------
-// 3. SYNCHRONIZE SECTIONS 1 TO 16 (CURRICULUM, VIDEOS, ACTIVITIES, QUIZZES)
+// 3. SYNCHRONIZE SECTIONS 1 TO 16 (WITH CALCULATED DATES & DEADLINES)
 // ---------------------------------------------------------
 $quizmodule = $DB->get_record('modules', ['name' => 'quiz']);
 
@@ -444,6 +488,21 @@ for ($wnum = 1; $wnum <= 16; $wnum++) {
 
     $w = $curriculum[$wnum] ?? $curriculum[strval($wnum)];
     $title = $w['title'] ?? "Week {$wnum}";
+
+    // Calculate Week Schedule based on Semester Start Date
+    $weekStartTime = strtotime("+".($wnum - 1)." weeks", $semesterStart);
+    $weekDueTime = strtotime("+".$wnum." weeks - 1 second", $semesterStart);
+    $weekCutoffTime = $weekDueTime + (3 * 86400); // 3 days grace period
+    $weekGradingDueTime = $weekDueTime + (7 * 86400); // 7 days after due date for teacher grading
+    $weekDateRangeStr = date('M d', $weekStartTime) . ' – ' . date('M d, Y', $weekDueTime);
+
+    $weekDates = [
+        'start' => $weekStartTime,
+        'due' => $weekDueTime,
+        'cutoff' => $weekCutoffTime,
+        'gradingdue' => $weekGradingDueTime,
+        'date_str' => $weekDateRangeStr
+    ];
 
     // Ensure section exists and rename
     $sec_rec = $DB->get_record('course_sections', ['course' => $courseid, 'section' => $wnum]);
@@ -461,9 +520,12 @@ for ($wnum = 1; $wnum <= 16; $wnum++) {
         $DB->update_record('course_sections', $sec_rec);
     }
 
-    // A. 100% Verbatim Overview Card (Handbook Overview + Student Learning Objectives)
+    // A. 100% Verbatim Overview Card (Handbook Overview + Schedule Badge + Objectives)
     $overviewHtml = '<div class="card p-3 my-2" style="border-left: 4px solid #3b82f6; border-radius: 8px; background: #f8fafc;">';
-    $overviewHtml .= '<h5 style="color: #1e3a8a; font-weight: 700; margin-bottom: 12px;">Week ' . sprintf('%02d', $wnum) . ' Overview: ' . htmlspecialchars($title) . '</h5>';
+    $overviewHtml .= '<div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">';
+    $overviewHtml .= '<h5 style="color: #1e3a8a; font-weight: 700; margin: 0;">Week ' . sprintf('%02d', $wnum) . ' Overview: ' . htmlspecialchars($title) . '</h5>';
+    $overviewHtml .= '<span class="badge bg-primary" style="font-size: 0.8rem; padding: 5px 10px; border-radius: 6px;"><i class="fa fa-calendar mr-1"></i> ' . $weekDateRangeStr . '</span>';
+    $overviewHtml .= '</div>';
     $overviewHtml .= '<p style="color: #334155; line-height: 1.6; margin-bottom: 14px;">' . nl2br(htmlspecialchars($w['overview'] ?? '')) . '</p>';
     if (!empty($w['objectives'])) {
         $overviewHtml .= '<h6 style="color: #1e40af; font-weight: 600; text-transform: uppercase; font-size: 0.82rem; letter-spacing: 0.5px; margin-bottom: 8px;">Student Learning Objectives:</h6>';
@@ -547,18 +609,18 @@ for ($wnum = 1; $wnum <= 16; $wnum++) {
     // D. REAL MOODLE DISCUSSION FORUM (mod_forum)
     if (!empty($w['discussion'])) {
         $forumTitle = sprintf("Week %02d Discussion Forum: %s", $wnum, $title);
-        $forumCmid = sync_forum_activity($courseid, $wnum, $forumTitle, $w['discussion']);
+        $forumCmid = sync_forum_activity($courseid, $wnum, $forumTitle, $w['discussion'], $weekDates);
         echo "  ✔ Week {$wnum} Discussion Forum synced (CMID: {$forumCmid})\n";
     }
 
-    // E. REAL MOODLE ASSIGNMENT (mod_assign)
+    // E. REAL MOODLE ASSIGNMENT (mod_assign) WITH SEMESTER DUE DATES
     if (!empty($w['assignment'])) {
         $assignTitle = sprintf("Week %02d Assignment: %s", $wnum, $title);
-        $assignCmid = sync_assignment_activity($courseid, $wnum, $assignTitle, $w['assignment']);
-        echo "  ✔ Week {$wnum} Assignment Activity synced (CMID: {$assignCmid})\n";
+        $assignCmid = sync_assignment_activity($courseid, $wnum, $assignTitle, $w['assignment'], $weekDates);
+        echo "  ✔ Week {$wnum} Assignment Activity synced (CMID: {$assignCmid}, Due: {$weekDates['date_str']})\n";
     }
 
-    // F. NATIVE MOODLE QUIZ FOR THIS WEEK
+    // F. NATIVE MOODLE QUIZ FOR THIS WEEK WITH OPEN/CLOSE TIMESTAMPS
     if (!empty($w['mcqs'])) {
         $quizName = match ($wnum) {
             8 => 'Week 08: Midterm Examination',
@@ -609,14 +671,15 @@ for ($wnum = 1; $wnum <= 16; $wnum++) {
             $new_cmid = $DB->insert_record('course_modules', $cm);
             course_add_cm_to_section($courseid, $new_cmid, $wnum, null, 'quiz');
 
-            // Insert quiz record
+            // Insert quiz record with Semester Schedule
             $quiz = new stdClass();
             $quiz->course = $courseid;
             $quiz->name = $quizName;
-            $quiz->intro = '<p>Complete this interactive assessment to test your mastery of Week ' . sprintf('%02d', $wnum) . ' (' . htmlspecialchars($title) . ') concepts.</p>';
+            $quiz->intro = '<p>Complete this interactive assessment to test your mastery of Week ' . sprintf('%02d', $wnum) . ' (' . htmlspecialchars($title) . ') concepts.</p>'
+                . '<p><strong>Quiz Period:</strong> ' . $weekDateRangeStr . '</p>';
             $quiz->introformat = FORMAT_HTML;
-            $quiz->timeopen = 0;
-            $quiz->timeclose = 0;
+            $quiz->timeopen = $weekDates['start'];
+            $quiz->timeclose = $weekDates['due'];
             $quiz->timelimit = $timeLimit;
             $quiz->overduehandling = 'autoabandon';
             $quiz->graceperiod = 0;
@@ -792,7 +855,12 @@ for ($wnum = 1; $wnum <= 16; $wnum++) {
 
             echo "  ✔ Week {$wnum} Native Quiz created with {$totalMarks} questions: '{$quizName}'\n";
         } else {
-            echo "  ✔ Week {$wnum} Native Quiz verified: '{$existingQuiz->name}'\n";
+            // Update quiz open/close dates on existing quiz
+            $existingQuiz->timeopen = $weekDates['start'];
+            $existingQuiz->timeclose = $weekDates['due'];
+            $existingQuiz->timemodified = time();
+            $DB->update_record('quiz', $existingQuiz);
+            echo "  ✔ Week {$wnum} Native Quiz schedule updated: '{$existingQuiz->name}' (Open: " . date('M d', $weekDates['start']) . ", Close: " . date('M d', $weekDates['due']) . ")\n";
         }
     }
 }

@@ -10,6 +10,11 @@
                 <i class="fa fa-external-link me-1"></i> Open in Moodle (ID: {{ $course->moodle_course_id }})
             </a>
         @endif
+        @if($course->start_date)
+            <span class="badge bg-primary bg-opacity-10 text-primary border border-primary ms-1">
+                <i class="fa fa-calendar-alt me-1"></i> Semester: {{ $course->start_date->format('M d, Y') }} — {{ $course->start_date->copy()->addWeeks(16)->format('M d, Y') }} (16 Weeks)
+            </span>
+        @endif
     </div>
     <a href="{{ route('dashboard') }}" class="btn btn-outline-secondary">
         <i class="fa fa-arrow-left me-1"></i> Back to Dashboard
@@ -27,7 +32,16 @@
             <h2 class="accordion-header" id="heading{{ $wnum }}">
                 <button class="accordion-button {{ $loop->first ? '' : 'collapsed' }} fw-bold" type="button" data-bs-toggle="collapse" data-bs-target="#collapse{{ $wnum }}" aria-expanded="{{ $loop->first ? 'true' : 'false' }}">
                     <span class="badge bg-primary me-2">Week {{ sprintf('%02d', $wnum) }}</span>
-                    {{ $w['title'] ?? "Week {$wnum}" }}
+                    <span class="me-auto">{{ $w['title'] ?? "Week {$wnum}" }}</span>
+                    @if($course->start_date)
+                        @php
+                            $wStart = $course->start_date->copy()->addWeeks($wnum - 1);
+                            $wEnd = $wStart->copy()->addDays(6);
+                        @endphp
+                        <span class="badge bg-light text-primary border me-3" style="font-size: 0.8rem; font-weight: 500;">
+                            <i class="fa fa-calendar-day me-1"></i> {{ $wStart->format('M d') }} - {{ $wEnd->format('M d, Y') }}
+                        </span>
+                    @endif
                 </button>
             </h2>
             <div id="collapse{{ $wnum }}" class="accordion-collapse collapse {{ $loop->first ? 'show' : '' }}" data-bs-parent="#weeksAccordion">

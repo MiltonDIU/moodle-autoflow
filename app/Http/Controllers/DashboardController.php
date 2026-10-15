@@ -134,12 +134,19 @@ class DashboardController extends Controller
         return redirect()->route('dashboard')->with('success', "Discovered " . count($discovered) . " course folder(s) for {$university->name}.");
     }
 
-    public function processCourse($id)
+    public function processCourse(Request $request, $id)
     {
         $course = Course::findOrFail($id);
         $uniId = $course->university_id ?: 1;
 
-        $course->update(['status' => 'processing', 'progress' => 15]);
+        $startDate = $request->input('start_date') 
+            ?: ($course->start_date ? $course->start_date->format('Y-m-d') : Setting::get('semester_start_date', date('Y-m-d'), $uniId));
+
+        $course->update([
+            'status' => 'processing',
+            'progress' => 15,
+            'start_date' => $startDate
+        ]);
 
         try {
             // 1. Scan Drive for files & videos
@@ -177,7 +184,8 @@ class DashboardController extends Controller
                 $curriculum,
                 $processedVideos,
                 $scanData['documents'],
-                $course->moodle_course_id
+                $course->moodle_course_id,
+                $startDate
             );
 
             $course->update([
